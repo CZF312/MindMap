@@ -1,5 +1,7 @@
 package com.example.mindmap.model;
 
+import javafx.scene.paint.Color;
+
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -14,6 +16,7 @@ public class MindMap {
     private Path filePath;
     private boolean modified;
     private double zoom = 1.0;
+    private Color canvasColor = Color.WHITE;
     private long nextId = 1;
 
     public MindMap() {
@@ -79,6 +82,7 @@ public class MindMap {
         copy.filePath = filePath;
         copy.modified = modified;
         copy.zoom = zoom;
+        copy.canvasColor = canvasColor;
         copy.nextId = nextId;
         return copy;
     }
@@ -90,6 +94,7 @@ public class MindMap {
         filePath = other.filePath;
         modified = other.modified;
         zoom = other.zoom;
+        canvasColor = other.canvasColor;
         nextId = other.nextId;
     }
 
@@ -155,5 +160,13 @@ public class MindMap {
 
     public void setZoom(double zoom) {
         this.zoom = Math.max(0.3, Math.min(3.0, zoom));
+    }
+
+    public Color getCanvasColor() {
+        return canvasColor;
+    }
+
+    public void setCanvasColor(Color canvasColor) {
+        this.canvasColor = canvasColor == null ? Color.WHITE : canvasColor;
     }
 }

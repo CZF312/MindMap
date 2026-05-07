@@ -13,6 +13,7 @@ public class MindNode {
     private double y;
     private double width = 150;
     private double height = 54;
+    private boolean customSize;
     private double offsetX;
     private double offsetY;
     private boolean collapsed;
@@ -95,7 +96,8 @@ public class MindNode {
     }
 
     public void setWidth(double width) {
-        this.width = width;
+        this.width = Math.max(60, width);
+        customSize = true;
     }
 
     public double getHeight() {
@@ -103,7 +105,23 @@ public class MindNode {
     }
 
     public void setHeight(double height) {
-        this.height = height;
+        this.height = Math.max(36, height);
+        customSize = true;
+    }
+
+    public void setMeasuredSize(double width, double height) {
+        if (!customSize) {
+            this.width = Math.max(60, width);
+            this.height = Math.max(36, height);
+        }
+    }
+
+    public boolean hasCustomSize() {
+        return customSize;
+    }
+
+    public void setCustomSize(boolean customSize) {
+        this.customSize = customSize;
     }
 
     public double getOffsetX() {
@@ -171,6 +189,7 @@ public class MindNode {
         copy.y = y;
         copy.width = width;
         copy.height = height;
+        copy.customSize = customSize;
         copy.offsetX = offsetX;
         copy.offsetY = offsetY;
         copy.collapsed = collapsed;

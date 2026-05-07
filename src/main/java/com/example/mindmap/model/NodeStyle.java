@@ -1,11 +1,19 @@
 package com.example.mindmap.model;
 
 import javafx.scene.paint.Color;
+import javafx.scene.text.TextAlignment;
 
 public class NodeStyle {
     private Color fillColor;
     private Color borderColor;
     private Color textColor;
+    private String fontFamily = "Microsoft YaHei UI";
+    private double fontSize = 13;
+    private boolean bold;
+    private boolean italic;
+    private boolean underline;
+    private boolean strikethrough;
+    private TextAlignment alignment = TextAlignment.CENTER;
 
     public NodeStyle() {
         this(Color.web("#FFFFFF"), Color.web("#CBD5E1"), Color.web("#0F172A"));
@@ -18,7 +26,15 @@ public class NodeStyle {
     }
 
     public NodeStyle copy() {
-        return new NodeStyle(fillColor, borderColor, textColor);
+        NodeStyle copy = new NodeStyle(fillColor, borderColor, textColor);
+        copy.fontFamily = fontFamily;
+        copy.fontSize = fontSize;
+        copy.bold = bold;
+        copy.italic = italic;
+        copy.underline = underline;
+        copy.strikethrough = strikethrough;
+        copy.alignment = alignment;
+        return copy;
     }
 
     public Color getFillColor() {
@@ -43,6 +59,62 @@ public class NodeStyle {
 
     public void setTextColor(Color textColor) {
         this.textColor = textColor;
+    }
+
+    public String getFontFamily() {
+        return fontFamily;
+    }
+
+    public void setFontFamily(String fontFamily) {
+        this.fontFamily = fontFamily == null || fontFamily.isBlank() ? "Microsoft YaHei UI" : fontFamily;
+    }
+
+    public double getFontSize() {
+        return fontSize;
+    }
+
+    public void setFontSize(double fontSize) {
+        this.fontSize = Math.max(8, Math.min(72, fontSize));
+    }
+
+    public boolean isBold() {
+        return bold;
+    }
+
+    public void setBold(boolean bold) {
+        this.bold = bold;
+    }
+
+    public boolean isItalic() {
+        return italic;
+    }
+
+    public void setItalic(boolean italic) {
+        this.italic = italic;
+    }
+
+    public boolean isUnderline() {
+        return underline;
+    }
+
+    public void setUnderline(boolean underline) {
+        this.underline = underline;
+    }
+
+    public boolean isStrikethrough() {
+        return strikethrough;
+    }
+
+    public void setStrikethrough(boolean strikethrough) {
+        this.strikethrough = strikethrough;
+    }
+
+    public TextAlignment getAlignment() {
+        return alignment;
+    }
+
+    public void setAlignment(TextAlignment alignment) {
+        this.alignment = alignment == null ? TextAlignment.CENTER : alignment;
     }
 
     public static String toHex(Color color) {

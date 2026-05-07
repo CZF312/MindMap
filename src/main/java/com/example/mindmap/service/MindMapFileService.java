@@ -5,6 +5,7 @@ import com.example.mindmap.model.MindMap;
 import com.example.mindmap.model.MindNode;
 import com.example.mindmap.model.NodeStyle;
 import javafx.scene.paint.Color;
+import javafx.scene.text.TextAlignment;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
@@ -34,6 +35,7 @@ public class MindMapFileService {
         MindMap map = new MindMap();
         map.setName(rootElement.getAttribute("name"));
         map.setLayoutType(parseLayout(rootElement.getAttribute("layout")));
+        map.setCanvasColor(NodeStyle.fromHex(rootElement.getAttribute("background"), Color.WHITE));
         NodeList roots = rootElement.getElementsByTagName("node");
         if (roots.getLength() == 0) {
             throw new IOException("文件中没有中心节点");
@@ -56,6 +58,7 @@ public class MindMapFileService {
         root.setAttribute("version", "1");
         root.setAttribute("name", map.getName());
         root.setAttribute("layout", map.getLayoutType().name());
+        root.setAttribute("background", NodeStyle.toHex(map.getCanvasColor()));
         document.appendChild(root);
         root.appendChild(writeNode(document, map.getRoot()));
 
@@ -75,10 +78,20 @@ public class MindMapFileService {
         element.setAttribute("y", String.valueOf(node.getY()));
         element.setAttribute("offsetX", String.valueOf(node.getOffsetX()));
         element.setAttribute("offsetY", String.valueOf(node.getOffsetY()));
+        element.setAttribute("width", String.valueOf(node.getWidth()));
+        element.setAttribute("height", String.valueOf(node.getHeight()));
+        element.setAttribute("customSize", String.valueOf(node.hasCustomSize()));
         element.setAttribute("collapsed", String.valueOf(node.isCollapsed()));
         element.setAttribute("fill", NodeStyle.toHex(node.getStyle().getFillColor()));
         element.setAttribute("border", NodeStyle.toHex(node.getStyle().getBorderColor()));
         element.setAttribute("textColor", NodeStyle.toHex(node.getStyle().getTextColor()));
+        element.setAttribute("fontFamily", node.getStyle().getFontFamily());
+        element.setAttribute("fontSize", String.valueOf(node.getStyle().getFontSize()));
+        element.setAttribute("bold", String.valueOf(node.getStyle().isBold()));
+        element.setAttribute("italic", String.valueOf(node.getStyle().isItalic()));
+        element.setAttribute("underline", String.valueOf(node.getStyle().isUnderline()));
+        element.setAttribute("strikethrough", String.valueOf(node.getStyle().isStrikethrough()));
+        element.setAttribute("alignment", node.getStyle().getAlignment().name());
         for (MindNode child : node.getChildren()) {
             element.appendChild(writeNode(document, child));
         }
@@ -89,13 +102,24 @@ public class MindMapFileService {
         MindNode node = new MindNode(attribute(element, "id", "node-1"), attribute(element, "text", "新节点"));
         node.setX(parseDouble(element.getAttribute("x"), 0));
         node.setY(parseDouble(element.getAttribute("y"), 0));
+        node.setWidth(parseDouble(element.getAttribute("width"), 150));
+        node.setHeight(parseDouble(element.getAttribute("height"), 54));
+        node.setCustomSize(Boolean.parseBoolean(element.getAttribute("customSize")));
         node.setOffsetX(parseDouble(element.getAttribute("offsetX"), 0));
         node.setOffsetY(parseDouble(element.getAttribute("offsetY"), 0));
         node.setCollapsed(Boolean.parseBoolean(element.getAttribute("collapsed")));
-        node.setStyle(new NodeStyle(
+        NodeStyle style = new NodeStyle(
                 NodeStyle.fromHex(element.getAttribute("fill"), Color.WHITE),
                 NodeStyle.fromHex(element.getAttribute("border"), Color.web("#CBD5E1")),
-                NodeStyle.fromHex(element.getAttribute("textColor"), Color.web("#0F172A"))));
+                NodeStyle.fromHex(element.getAttribute("textColor"), Color.web("#0F172A")));
+        style.setFontFamily(attribute(element, "fontFamily", "Microsoft YaHei UI"));
+        style.setFontSize(parseDouble(element.getAttribute("fontSize"), 13));
+        style.setBold(Boolean.parseBoolean(element.getAttribute("bold")));
+        style.setItalic(Boolean.parseBoolean(element.getAttribute("italic")));
+        style.setUnderline(Boolean.parseBoolean(element.getAttribute("underline")));
+        style.setStrikethrough(Boolean.parseBoolean(element.getAttribute("strikethrough")));
+        style.setAlignment(parseAlignment(element.getAttribute("alignment")));
+        node.setStyle(style);
         NodeList children = element.getChildNodes();
         for (int i = 0; i < children.getLength(); i++) {
             if (children.item(i) instanceof Element child && "node".equals(child.getTagName())) {
@@ -118,6 +142,14 @@ public class MindMapFileService {
             return Double.parseDouble(value);
         } catch (NumberFormatException ex) {
             return fallback;
+        }
+    }
+
+    private TextAlignment parseAlignment(String value) {
+        try {
+            return TextAlignment.valueOf(value);
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            return TextAlignment.CENTER;
         }
     }
 

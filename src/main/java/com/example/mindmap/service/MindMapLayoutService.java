@@ -45,8 +45,7 @@ public class MindMapLayoutService {
         int visualLength = text.codePointCount(0, text.length());
         double width = Math.min(230, Math.max(node.isRoot() ? 150 : 126, 46 + visualLength * 9.2));
         int lines = Math.max(1, (int) Math.ceil((visualLength * 9.2) / Math.max(80, width - 34)));
-        node.setWidth(width);
-        node.setHeight(Math.max(node.isRoot() ? 58 : 48, 30 + lines * 20));
+        node.setMeasuredSize(width, Math.max(node.isRoot() ? 58 : 48, 30 + lines * 20));
     }
 
     private void layoutSide(List<MindNode> nodes, int direction, double anchorX, double centerY, boolean firstLevel) {

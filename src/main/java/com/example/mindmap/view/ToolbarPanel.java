@@ -5,6 +5,7 @@ import com.example.mindmap.model.LayoutType;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.control.ColorPicker;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuButton;
@@ -34,8 +35,13 @@ public class ToolbarPanel extends VBox {
     private final Button redoButton = button("重做", "重做上一次撤销");
     private final Button collapseButton = button("折叠", "折叠或展开主选中节点");
     private final TextField searchField = new TextField();
+    private final TextField replaceField = new TextField();
     private final ColorPicker fillPicker = new ColorPicker(Color.WHITE);
     private final ColorPicker borderPicker = new ColorPicker(Color.web("#CBD5E1"));
+    private final ColorPicker textPicker = new ColorPicker(Color.web("#0F172A"));
+    private final ColorPicker canvasPicker = new ColorPicker(Color.WHITE);
+    private final ComboBox<String> fontBox = new ComboBox<>();
+    private final ComboBox<Integer> fontSizeBox = new ComboBox<>();
     private final ToggleButton autoLayout = layoutButton("自动");
     private final ToggleButton leftLayout = layoutButton("左侧");
     private final ToggleButton rightLayout = layoutButton("右侧");
@@ -43,6 +49,7 @@ public class ToolbarPanel extends VBox {
     private final ToggleButton styleTab = ribbonTab("样式");
     private final ToggleButton layoutTab = ribbonTab("布局");
     private final ToggleButton exportTab = ribbonTab("导出");
+    private boolean updatingControls;
 
     public ToolbarPanel(MindMapController controller) {
         this.controller = controller;
@@ -70,27 +77,62 @@ public class ToolbarPanel extends VBox {
         searchField.textProperty().addListener((obs, oldValue, newValue) -> controller.search(newValue));
         searchField.setOnAction(event -> controller.nextSearchResult());
 
+        replaceField.setPromptText("替换为");
+        replaceField.getStyleClass().add("replace-field");
+        replaceField.setMinWidth(130);
+        replaceField.setOnAction(event -> controller.replaceCurrentSearchResult(searchField.getText(), replaceField.getText()));
+
         fillPicker.setTooltip(new javafx.scene.control.Tooltip("填充色"));
         borderPicker.setTooltip(new javafx.scene.control.Tooltip("边框色"));
+        textPicker.setTooltip(new javafx.scene.control.Tooltip("文字颜色"));
+        canvasPicker.setTooltip(new javafx.scene.control.Tooltip("画布背景色"));
         fillPicker.setMinWidth(120);
         borderPicker.setMinWidth(120);
+        textPicker.setMinWidth(105);
+        canvasPicker.setMinWidth(120);
         fillPicker.setOnAction(event -> controller.changeFillColor(fillPicker.getValue()));
         borderPicker.setOnAction(event -> controller.changeBorderColor(borderPicker.getValue()));
+        textPicker.setOnAction(event -> controller.changeTextColor(textPicker.getValue()));
+        canvasPicker.setOnAction(event -> {
+            if (!updatingControls) {
+                controller.changeCanvasColor(canvasPicker.getValue());
+            }
+        });
+        fontBox.getItems().addAll("Microsoft YaHei UI", "SimSun", "SimHei", "KaiTi", "Arial");
+        fontBox.setValue("Microsoft YaHei UI");
+        fontBox.setTooltip(new javafx.scene.control.Tooltip("字体"));
+        fontBox.setMinWidth(150);
+        fontBox.setOnAction(event -> controller.changeFontFamily(fontBox.getValue()));
+        fontSizeBox.getItems().addAll(12, 14, 16, 18, 20, 24, 28, 30, 36, 48);
+        fontSizeBox.setValue(13);
+        fontSizeBox.setTooltip(new javafx.scene.control.Tooltip("字号"));
+        fontSizeBox.setMinWidth(82);
+        fontSizeBox.setOnAction(event -> controller.changeFontSize(fontSizeBox.getValue()));
 
         HBox startPage = ribbonPage(
-                ribbonGroup("查找", searchField,
-                        button("上一个", "定位上一个搜索结果", controller::previousSearchResult),
-                        button("下一个", "定位下一个搜索结果", controller::nextSearchResult)),
+                ribbonGroup("文字", fontBox, fontSizeBox,
+                        iconButton("B", "加粗", controller::toggleBold),
+                        iconButton("I", "斜体", controller::toggleItalic),
+                        iconButton("U", "下划线", controller::toggleUnderline),
+                        iconButton("S", "删除线", controller::toggleStrikethrough),
+                        textPicker,
+                        iconButton("≡", "左对齐", () -> controller.changeTextAlignment(javafx.scene.text.TextAlignment.LEFT)),
+                        iconButton("≣", "居中对齐", () -> controller.changeTextAlignment(javafx.scene.text.TextAlignment.CENTER)),
+                        iconButton("≡", "右对齐", () -> controller.changeTextAlignment(javafx.scene.text.TextAlignment.RIGHT))),
+                ribbonGroup("颜色", fillPicker, borderPicker),
                 ribbonGroup("节点",
                         button("子节点", "添加子节点", controller::addChildNode),
                         addSiblingButton,
                         renameButton,
                         deleteButton,
-                        collapseButton),
-                ribbonGroup("编辑", undoButton, redoButton)
+                        collapseButton,
+                        button("全部展开", "展开所有节点", controller::expandAll),
+                        button("全部收起", "收起所有分支", controller::collapseAll)),
+                ribbonGroup("编辑", undoButton, redoButton),
+                ribbonGroup("查找", button("⌕ 查找替换", "打开查找替换窗口", controller::showFindReplaceDialog))
         );
         HBox stylePage = ribbonPage(
-                ribbonGroup("节点颜色", fillPicker, borderPicker),
+                ribbonGroup("画布", canvasPicker),
                 ribbonGroup("常用样式",
                         button("白底", "设置选中节点为白色填充", () -> controller.changeFillColor(Color.WHITE)),
                         button("蓝底", "设置选中节点为蓝色填充", () -> controller.changeFillColor(Color.web("#2563EB"))),
@@ -160,6 +202,26 @@ public class ToolbarPanel extends VBox {
         return searchField;
     }
 
+    public TextField getReplaceField() {
+        return replaceField;
+    }
+
+    public void focusSearchField() {
+        searchField.requestFocus();
+        searchField.selectAll();
+    }
+
+    public void focusReplaceField() {
+        replaceField.requestFocus();
+        replaceField.selectAll();
+    }
+
+    public void updateCanvasColor(Color color) {
+        updatingControls = true;
+        canvasPicker.setValue(color == null ? Color.WHITE : color);
+        updatingControls = false;
+    }
+
     public void updateState(boolean hasSelection, boolean canAddSibling, boolean canDelete, boolean canCollapse,
                             boolean canUndo, boolean canRedo, LayoutType layoutType) {
         addSiblingButton.setDisable(!canAddSibling);
@@ -210,6 +272,12 @@ public class ToolbarPanel extends VBox {
         if (action != null) {
             button.setOnAction(event -> action.run());
         }
+        return button;
+    }
+
+    private Button iconButton(String text, String tooltip, Runnable action) {
+        Button button = button(text, tooltip, action);
+        button.getStyleClass().add("icon-tool-button");
         return button;
     }
 

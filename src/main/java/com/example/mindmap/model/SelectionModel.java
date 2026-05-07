@@ -1,5 +1,6 @@
 package com.example.mindmap.model;
 
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -29,6 +30,20 @@ public class SelectionModel {
         } else {
             selectedNodeIds.add(node.getId());
             primaryNodeId = node.getId();
+        }
+    }
+
+    public void selectAll(Collection<MindNode> nodes) {
+        selectedNodeIds.clear();
+        primaryNodeId = null;
+        if (nodes == null) {
+            return;
+        }
+        for (MindNode node : nodes) {
+            if (node != null) {
+                selectedNodeIds.add(node.getId());
+                primaryNodeId = node.getId();
+            }
         }
     }
 

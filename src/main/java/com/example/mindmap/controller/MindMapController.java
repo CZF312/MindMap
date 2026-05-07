@@ -21,12 +21,17 @@ import com.example.mindmap.util.Dialogs;
 import com.example.mindmap.view.MainFrame;
 import javafx.application.Platform;
 import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputControl;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.paint.Color;
+import javafx.scene.text.TextAlignment;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
@@ -256,10 +261,18 @@ public class MindMapController {
     public void renameNode(MindNode node) {
         Dialogs.input(stage, "重命名节点", "节点文本：", node.getText())
                 .filter(text -> !text.isBlank())
-                .ifPresent(text -> executeAndRefresh(new RenameNodeCommand(currentMap, () -> {
-                    find(node.getId()).ifPresent(live -> live.setText(text));
-                    selectionModel.setPrimaryNodeId(node.getId());
-                }), "已重命名节点", true));
+                .ifPresent(text -> renameNodeText(node.getId(), text));
+    }
+
+    public void renameNodeText(String nodeId, String text) {
+        if (text == null || text.isBlank()) {
+            notice("节点文本不能为空");
+            return;
+        }
+        executeAndRefresh(new RenameNodeCommand(currentMap, () -> {
+            find(nodeId).ifPresent(live -> live.setText(text));
+            selectionModel.setPrimaryNodeId(nodeId);
+        }), "已重命名节点", true);
     }
 
     public void changeFillColor(Color color) {
@@ -268,6 +281,52 @@ public class MindMapController {
 
     public void changeBorderColor(Color color) {
         changeSelectedStyle(color, false);
+    }
+
+    public void changeTextColor(Color color) {
+        List<String> ids = new ArrayList<>(selectionModel.getSelectedNodeIds());
+        if (ids.isEmpty()) {
+            notice("请先选择一个或多个节点");
+            return;
+        }
+        executeAndRefresh(new ChangeStyleCommand(currentMap, () -> {
+            for (String id : ids) {
+                find(id).ifPresent(node -> node.getStyle().setTextColor(color));
+            }
+        }), "已设置文字颜色", false);
+    }
+
+    public void changeFontFamily(String family) {
+        updateSelectedTextStyle(style -> style.setFontFamily(family), "已设置字体");
+    }
+
+    public void changeFontSize(double size) {
+        updateSelectedTextStyle(style -> style.setFontSize(size), "已设置字号");
+    }
+
+    public void toggleBold() {
+        updateSelectedTextStyle(style -> style.setBold(!style.isBold()), "已切换加粗");
+    }
+
+    public void toggleItalic() {
+        updateSelectedTextStyle(style -> style.setItalic(!style.isItalic()), "已切换斜体");
+    }
+
+    public void toggleUnderline() {
+        updateSelectedTextStyle(style -> style.setUnderline(!style.isUnderline()), "已切换下划线");
+    }
+
+    public void toggleStrikethrough() {
+        updateSelectedTextStyle(style -> style.setStrikethrough(!style.isStrikethrough()), "已切换删除线");
+    }
+
+    public void changeTextAlignment(TextAlignment alignment) {
+        updateSelectedTextStyle(style -> style.setAlignment(alignment), "已设置文本对齐");
+    }
+
+    public void changeCanvasColor(Color color) {
+        executeAndRefresh(new ChangeStyleCommand(currentMap, () -> currentMap.setCanvasColor(color)),
+                "已设置画布背景色", false);
     }
 
     private void changeSelectedStyle(Color color, boolean fill) {
@@ -289,6 +348,19 @@ public class MindMapController {
         }), fill ? "已设置填充色" : "已设置边框色", false);
     }
 
+    private void updateSelectedTextStyle(java.util.function.Consumer<com.example.mindmap.model.NodeStyle> change, String status) {
+        List<String> ids = new ArrayList<>(selectionModel.getSelectedNodeIds());
+        if (ids.isEmpty()) {
+            notice("请先选择一个或多个节点");
+            return;
+        }
+        executeAndRefresh(new ChangeStyleCommand(currentMap, () -> {
+            for (String id : ids) {
+                find(id).ifPresent(node -> change.accept(node.getStyle()));
+            }
+        }), status, false);
+    }
+
     public void toggleCollapse() {
         MindNode node = primaryNode();
         if (node == null) {
@@ -307,6 +379,22 @@ public class MindMapController {
             find(node.getId()).ifPresent(live -> live.setCollapsed(!live.isCollapsed()));
             selectionModel.setPrimaryNodeId(node.getId());
         }), node.isCollapsed() ? "已展开节点" : "已折叠节点", true);
+    }
+
+    public void expandAll() {
+        executeAndRefresh(new ToggleCollapseCommand(currentMap, () ->
+                currentMap.allNodes().forEach(node -> node.setCollapsed(false))),
+                "已展开全部节点", true);
+    }
+
+    public void collapseAll() {
+        executeAndRefresh(new ToggleCollapseCommand(currentMap, () -> currentMap.allNodes().forEach(node -> {
+            if (!node.isRoot() && !node.getChildren().isEmpty()) {
+                node.setCollapsed(true);
+            } else if (node.isRoot()) {
+                node.setCollapsed(false);
+            }
+        })), "已收起全部分支", true);
     }
 
     public void changeLayout(LayoutType type) {
@@ -362,6 +450,78 @@ public class MindMapController {
         navigateSearch(-1);
     }
 
+    public void showFindReplaceDialog() {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.initOwner(stage);
+        dialog.setTitle("查找替换");
+        TextField findField = new TextField();
+        findField.setPromptText("查找内容");
+        TextField replaceField = new TextField();
+        replaceField.setPromptText("替换为");
+        Button findNext = new Button("查找下一个");
+        Button replace = new Button("替换");
+        Button replaceAll = new Button("全部替换");
+        javafx.scene.layout.GridPane pane = new javafx.scene.layout.GridPane();
+        pane.setHgap(8);
+        pane.setVgap(10);
+        pane.add(new javafx.scene.control.Label("查找："), 0, 0);
+        pane.add(findField, 1, 0, 3, 1);
+        pane.add(new javafx.scene.control.Label("替换："), 0, 1);
+        pane.add(replaceField, 1, 1, 3, 1);
+        pane.add(findNext, 1, 2);
+        pane.add(replace, 2, 2);
+        pane.add(replaceAll, 3, 2);
+        dialog.getDialogPane().setContent(pane);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        findNext.setOnAction(event -> {
+            search(findField.getText());
+            nextSearchResult();
+        });
+        replace.setOnAction(event -> replaceCurrentSearchResult(findField.getText(), replaceField.getText()));
+        replaceAll.setOnAction(event -> replaceAllSearchResults(findField.getText(), replaceField.getText()));
+        Platform.runLater(findField::requestFocus);
+        dialog.show();
+    }
+
+    public void replaceCurrentSearchResult(String keyword, String replacement) {
+        String target = keyword == null ? "" : keyword;
+        if (target.isBlank()) {
+            notice("请输入查找内容");
+            return;
+        }
+        if (searchResultIds.isEmpty()) {
+            search(target);
+        }
+        if (searchResultIds.isEmpty() || searchIndex < 0) {
+            notice("没有可替换的搜索结果");
+            return;
+        }
+        String id = searchResultIds.get(searchIndex);
+        executeAndRefresh(new RenameNodeCommand(currentMap, () ->
+                find(id).ifPresent(node -> node.setText(replaceFirstIgnoreCase(node.getText(), target, replacement)))),
+                "已替换当前匹配项", true);
+        search(target);
+    }
+
+    public void replaceAllSearchResults(String keyword, String replacement) {
+        String target = keyword == null ? "" : keyword;
+        if (target.isBlank()) {
+            notice("请输入查找内容");
+            return;
+        }
+        List<String> ids = searchService.search(currentMap, target).stream().map(MindNode::getId).toList();
+        if (ids.isEmpty()) {
+            notice("没有可替换的搜索结果");
+            return;
+        }
+        executeAndRefresh(new RenameNodeCommand(currentMap, () -> {
+            for (String id : ids) {
+                find(id).ifPresent(node -> node.setText(replaceAllIgnoreCase(node.getText(), target, replacement)));
+            }
+        }), "已替换 " + ids.size() + " 个节点", true);
+        search(target);
+    }
+
     private void navigateSearch(int delta) {
         if (searchResultIds.isEmpty()) {
             notice("没有搜索结果");
@@ -407,6 +567,17 @@ public class MindMapController {
         refreshAll("已选中节点：" + live.getText(), false);
     }
 
+    public void prepareNodeForDrag(MindNode node, boolean toggle) {
+        MindNode live = find(node.getId()).orElse(node);
+        if (!selectionModel.contains(live)) {
+            if (toggle) {
+                selectionModel.toggle(live);
+            } else {
+                selectionModel.selectOnly(live);
+            }
+        }
+    }
+
     public void selectFromTree(String nodeId) {
         find(nodeId).ifPresent(node -> {
             selectionModel.selectOnly(node);
@@ -418,6 +589,14 @@ public class MindMapController {
     public void clearSelection() {
         selectionModel.clear();
         refreshAll("已取消选择", false);
+    }
+
+    public void selectNodesInArea(double minX, double minY, double maxX, double maxY) {
+        List<MindNode> nodes = currentMap.visibleNodes().stream()
+                .filter(node -> intersects(node, minX, minY, maxX, maxY))
+                .toList();
+        selectionModel.selectAll(nodes);
+        refreshAll(nodes.isEmpty() ? "框选范围内没有节点" : "已框选 " + nodes.size() + " 个节点", false);
     }
 
     public boolean isSelected(MindNode node) {
@@ -432,7 +611,7 @@ public class MindMapController {
         for (MindNode node : topLevelSelected(selectedNodes())) {
             find(node.getId()).ifPresent(live -> live.moveBy(dx, dy));
         }
-        refreshAll("正在拖拽节点", false);
+        mainFrame.setStatus("正在拖拽节点");
     }
 
     public void finishDragSnapshot() {
@@ -445,6 +624,15 @@ public class MindMapController {
         currentMap.setModified(true);
         dragBefore = null;
         refreshAll("已移动节点", false);
+    }
+
+    public void resizeNode(String nodeId, double x, double y, double width, double height) {
+        find(nodeId).ifPresent(node -> {
+            node.setX(x);
+            node.setY(y);
+            node.setWidth(width);
+            node.setHeight(height);
+        });
     }
 
     public double preferredCanvasWidth() {
@@ -462,15 +650,20 @@ public class MindMapController {
         scene.getAccelerators().put(new KeyCodeCombination(KeyCode.S, KeyCombination.CONTROL_DOWN, KeyCombination.SHIFT_DOWN), this::saveMapAs);
         scene.getAccelerators().put(new KeyCodeCombination(KeyCode.E, KeyCombination.CONTROL_DOWN), this::exportPng);
         scene.getAccelerators().put(new KeyCodeCombination(KeyCode.Z, KeyCombination.CONTROL_DOWN), this::undo);
+        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.Z, KeyCombination.CONTROL_DOWN, KeyCombination.SHIFT_DOWN), this::redo);
         scene.getAccelerators().put(new KeyCodeCombination(KeyCode.Y, KeyCombination.CONTROL_DOWN), this::redo);
         scene.getAccelerators().put(new KeyCodeCombination(KeyCode.DELETE), this::deleteSelectedNodes);
         scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F2), this::renameSelectedNode);
-        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F, KeyCombination.CONTROL_DOWN), () -> mainFrame.getToolbarPanel().getSearchField().requestFocus());
+        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F3), this::nextSearchResult);
+        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F3, KeyCombination.SHIFT_DOWN), this::previousSearchResult);
+        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F, KeyCombination.CONTROL_DOWN), this::showFindReplaceDialog);
+        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.H, KeyCombination.CONTROL_DOWN), this::showFindReplaceDialog);
         scene.getAccelerators().put(new KeyCodeCombination(KeyCode.PLUS, KeyCombination.CONTROL_DOWN), this::zoomIn);
         scene.getAccelerators().put(new KeyCodeCombination(KeyCode.EQUALS, KeyCombination.CONTROL_DOWN), this::zoomIn);
         scene.getAccelerators().put(new KeyCodeCombination(KeyCode.MINUS, KeyCombination.CONTROL_DOWN), this::zoomOut);
         scene.getAccelerators().put(new KeyCodeCombination(KeyCode.DIGIT0, KeyCombination.CONTROL_DOWN), this::resetZoom);
         scene.getAccelerators().put(new KeyCodeCombination(KeyCode.DIGIT1, KeyCombination.CONTROL_DOWN), this::fitToWindow);
+        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.ESCAPE), this::clearSelection);
         scene.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (scene.getFocusOwner() instanceof TextInputControl) {
                 return;
@@ -510,6 +703,7 @@ public class MindMapController {
                 !undoStack.isEmpty(),
                 !redoStack.isEmpty(),
                 currentMap.getLayoutType());
+        mainFrame.getToolbarPanel().updateCanvasColor(currentMap.getCanvasColor());
         refreshRecentFiles();
         mainFrame.setStatus(status);
         mainFrame.setZoom(currentMap.getZoom());
@@ -587,6 +781,43 @@ public class MindMapController {
                 currentMap.setModified(true);
             }
         });
+    }
+
+    private boolean intersects(MindNode node, double minX, double minY, double maxX, double maxY) {
+        return node.getX() <= maxX
+                && node.getX() + node.getWidth() >= minX
+                && node.getY() <= maxY
+                && node.getY() + node.getHeight() >= minY;
+    }
+
+    private String replaceFirstIgnoreCase(String text, String target, String replacement) {
+        String source = text == null ? "" : text;
+        String normalizedSource = source.toLowerCase(java.util.Locale.ROOT);
+        String normalizedTarget = target.toLowerCase(java.util.Locale.ROOT);
+        int index = normalizedSource.indexOf(normalizedTarget);
+        if (index < 0) {
+            return source;
+        }
+        return source.substring(0, index) + safeReplacement(replacement) + source.substring(index + target.length());
+    }
+
+    private String replaceAllIgnoreCase(String text, String target, String replacement) {
+        String source = text == null ? "" : text;
+        String normalizedSource = source.toLowerCase(java.util.Locale.ROOT);
+        String normalizedTarget = target.toLowerCase(java.util.Locale.ROOT);
+        StringBuilder result = new StringBuilder();
+        int cursor = 0;
+        int index = normalizedSource.indexOf(normalizedTarget);
+        while (index >= 0) {
+            result.append(source, cursor, index).append(safeReplacement(replacement));
+            cursor = index + target.length();
+            index = normalizedSource.indexOf(normalizedTarget, cursor);
+        }
+        return result.append(source.substring(cursor)).toString();
+    }
+
+    private String safeReplacement(String replacement) {
+        return replacement == null ? "" : replacement;
     }
 
     private FileChooser mindMapChooser(String title) {
