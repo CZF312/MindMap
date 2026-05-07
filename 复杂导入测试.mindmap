@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<mindmap version="1" name="复杂导入测试" layout="AUTO">
+    <node id="node-1" text="复杂导入测试中心主题" x="820.0" y="500.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#2563EB" border="#1D4ED8" textColor="#FFFFFF">
+        <node id="node-2" text="项目规划：需求、范围、里程碑" x="1100.0" y="120.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#DBEAFE" border="#3B82F6" textColor="#0F172A">
+            <node id="node-3" text="需求收集：访谈、问卷、竞品分析、课堂演示反馈" x="1380.0" y="70.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFFFF" border="#93C5FD" textColor="#0F172A">
+                <node id="node-4" text="关键词：搜索测试 搜索测试 搜索测试" x="1660.0" y="40.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#EFF6FF" border="#BFDBFE" textColor="#0F172A"/>
+                <node id="node-5" text="超长节点文本用于测试换行显示效果以及结构树显示是否稳定" x="1660.0" y="100.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFFFF" border="#CBD5E1" textColor="#0F172A"/>
+            </node>
+            <node id="node-6" text="范围控制：必须做、应该做、可以延期" x="1380.0" y="190.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFFFF" border="#93C5FD" textColor="#0F172A">
+                <node id="node-7" text="必须做：新建、打开、保存、导出、撤销重做" x="1660.0" y="170.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#ECFDF5" border="#6EE7B7" textColor="#064E3B"/>
+                <node id="node-8" text="延期项：多人协作、云同步、模板市场" x="1660.0" y="230.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FEF3C7" border="#F59E0B" textColor="#78350F"/>
+            </node>
+            <node id="node-9" text="里程碑：第1周原型，第2周核心，第3周测试，第4周答辩" x="1380.0" y="320.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFFFF" border="#93C5FD" textColor="#0F172A"/>
+        </node>
+        <node id="node-10" text="界面与交互设计" x="420.0" y="130.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FCE7F3" border="#EC4899" textColor="#831843">
+            <node id="node-11" text="WPS风格菜单栏：文件入口、页签、功能分组" x="130.0" y="80.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFFFF" border="#F9A8D4" textColor="#831843"/>
+            <node id="node-12" text="右侧结构栏：可展开、可收起、选中后定位画布节点" x="130.0" y="150.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFFFF" border="#F9A8D4" textColor="#831843">
+                <node id="node-13" text="收起状态下保留窄按钮，避免完全找不到入口" x="-160.0" y="140.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FDF2F8" border="#FBCFE8" textColor="#831843"/>
+            </node>
+            <node id="node-14" text="缩放控制放右下角：放大、缩小、适应、恢复100%" x="130.0" y="240.0" offsetX="-35.0" offsetY="22.0" collapsed="false" fill="#FFFFFF" border="#F9A8D4" textColor="#831843"/>
+        </node>
+        <node id="node-15" text="数据结构与文件格式" x="1120.0" y="500.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#DCFCE7" border="#22C55E" textColor="#14532D">
+            <node id="node-16" text="XML属性：id、text、x、y、offsetX、offsetY、collapsed、fill、border、textColor" x="1410.0" y="430.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFFFF" border="#86EFAC" textColor="#14532D"/>
+            <node id="node-17" text="颜色解析：正常十六进制颜色" x="1410.0" y="510.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#ECFDF5" border="#34D399" textColor="#064E3B"/>
+            <node id="node-18" text="ID连续性：导入后新增节点应从最大ID继续" x="1410.0" y="590.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFFFF" border="#86EFAC" textColor="#14532D"/>
+        </node>
+        <node id="node-19" text="折叠分支测试：默认隐藏若干子孙节点" x="430.0" y="500.0" offsetX="0.0" offsetY="0.0" collapsed="true" fill="#FEF3C7" border="#F59E0B" textColor="#78350F">
+            <node id="node-20" text="隐藏节点一：展开后应该出现" x="140.0" y="460.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFBEB" border="#FCD34D" textColor="#78350F"/>
+            <node id="node-21" text="隐藏节点二：包含搜索测试关键词" x="140.0" y="530.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFBEB" border="#FCD34D" textColor="#78350F">
+                <node id="node-22" text="隐藏深层节点：用于测试展开后的重新布局" x="-150.0" y="530.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFFFF" border="#FDE68A" textColor="#78350F"/>
+            </node>
+        </node>
+        <node id="node-23" text="异常边界与可用性检查" x="1120.0" y="760.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#E0E7FF" border="#6366F1" textColor="#312E81">
+            <node id="node-24" text="空格与中英文混排 ABC 123 MindMap 导入测试" x="1410.0" y="690.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFFFF" border="#A5B4FC" textColor="#312E81"/>
+            <node id="node-25" text="特殊字符测试：A/B、C-D、版本1.0、保存&amp;导出" x="1410.0" y="770.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#EEF2FF" border="#818CF8" textColor="#312E81"/>
+            <node id="node-26" text="非常短" x="1410.0" y="850.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFFFF" border="#A5B4FC" textColor="#312E81"/>
+        </node>
+        <node id="node-27" text="搜索与定位测试区域" x="420.0" y="760.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#CCFBF1" border="#14B8A6" textColor="#134E4A">
+            <node id="node-28" text="搜索测试：第一个匹配结果" x="130.0" y="690.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFFFF" border="#5EEAD4" textColor="#134E4A"/>
+            <node id="node-29" text="搜索测试：第二个匹配结果" x="130.0" y="760.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFFFF" border="#5EEAD4" textColor="#134E4A"/>
+            <node id="node-30" text="定位后应自动选中并在结构树中同步" x="130.0" y="830.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#F0FDFA" border="#2DD4BF" textColor="#134E4A"/>
+        </node>
+        <node id="node-31" text="手动移动偏移测试" x="1120.0" y="980.0" offsetX="42.0" offsetY="-28.0" collapsed="false" fill="#FEE2E2" border="#EF4444" textColor="#7F1D1D">
+            <node id="node-32" text="子节点跟随父节点移动后的保存与读取" x="1410.0" y="930.0" offsetX="18.0" offsetY="16.0" collapsed="false" fill="#FFFFFF" border="#FCA5A5" textColor="#7F1D1D"/>
+            <node id="node-33" text="多选拖拽后可检查 offset 是否保留" x="1410.0" y="1010.0" offsetX="-24.0" offsetY="12.0" collapsed="false" fill="#FEF2F2" border="#F87171" textColor="#7F1D1D"/>
+        </node>
+        <node id="node-34" text="答辩演示流程" x="420.0" y="1010.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#F3E8FF" border="#A855F7" textColor="#581C87">
+            <node id="node-35" text="演示一：打开复杂文件并切换布局" x="130.0" y="930.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFFFF" border="#D8B4FE" textColor="#581C87"/>
+            <node id="node-36" text="演示二：搜索、定位、结构栏收起与展开" x="130.0" y="1010.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FAF5FF" border="#C084FC" textColor="#581C87"/>
+            <node id="node-37" text="演示三：修改颜色、添加节点、撤销重做、导出PNG" x="130.0" y="1090.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFFFF" border="#D8B4FE" textColor="#581C87"/>
+        </node>
+        <node id="node-38" text="深层链路测试" x="1120.0" y="1210.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#E2E8F0" border="#64748B" textColor="#0F172A">
+            <node id="node-39" text="第1层" x="1410.0" y="1210.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFFFF" border="#CBD5E1" textColor="#0F172A">
+                <node id="node-40" text="第2层" x="1690.0" y="1210.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFFFF" border="#CBD5E1" textColor="#0F172A">
+                    <node id="node-41" text="第3层" x="1970.0" y="1210.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#FFFFFF" border="#CBD5E1" textColor="#0F172A">
+                        <node id="node-42" text="第4层：测试连线、缩放和画布滚动范围" x="2250.0" y="1210.0" offsetX="0.0" offsetY="0.0" collapsed="false" fill="#F8FAFC" border="#94A3B8" textColor="#0F172A"/>
+                    </node>
+                </node>
+            </node>
+        </node>
+    </node>
+</mindmap>
