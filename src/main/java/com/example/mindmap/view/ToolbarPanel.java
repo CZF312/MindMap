@@ -1,8 +1,11 @@
 package com.example.mindmap.view;
 
 import com.example.mindmap.controller.MindMapController;
+import com.example.mindmap.model.ConnectionShape;
 import com.example.mindmap.model.LayoutType;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.ComboBox;
@@ -40,8 +43,13 @@ public class ToolbarPanel extends VBox {
     private final ColorPicker borderPicker = new ColorPicker(Color.web("#CBD5E1"));
     private final ColorPicker textPicker = new ColorPicker(Color.web("#0F172A"));
     private final ColorPicker canvasPicker = new ColorPicker(Color.WHITE);
+    private final ColorPicker connectionPicker = new ColorPicker(Color.web("#94A3B8"));
     private final ComboBox<String> fontBox = new ComboBox<>();
     private final ComboBox<Integer> fontSizeBox = new ComboBox<>();
+    private final ComboBox<Double> connectionWidthBox = new ComboBox<>();
+    private final ToggleButton connectionDashedButton = new ToggleButton("虚线");
+    private final ToggleButton curveConnectionButton = layoutButton("曲线");
+    private final ToggleButton elbowConnectionButton = layoutButton("折线");
     private final ToggleButton autoLayout = layoutButton("自动");
     private final ToggleButton leftLayout = layoutButton("左侧");
     private final ToggleButton rightLayout = layoutButton("右侧");
@@ -50,6 +58,10 @@ public class ToolbarPanel extends VBox {
     private final ToggleButton layoutTab = ribbonTab("布局");
     private final ToggleButton exportTab = ribbonTab("导出");
     private boolean updatingControls;
+
+    private enum TextAlignIcon {
+        LEFT, CENTER, RIGHT
+    }
 
     public ToolbarPanel(MindMapController controller) {
         this.controller = controller;
@@ -64,6 +76,7 @@ public class ToolbarPanel extends VBox {
                 item("另存为...", controller::saveMapAs),
                 item("导出 PNG...", controller::exportPng),
                 item("导出 JPG...", controller::exportJpg),
+                item("导出 PDF...", controller::exportPdf),
                 recentMenu);
 
         ToggleGroup layoutGroup = new ToggleGroup();
@@ -86,16 +99,23 @@ public class ToolbarPanel extends VBox {
         borderPicker.setTooltip(new javafx.scene.control.Tooltip("边框色"));
         textPicker.setTooltip(new javafx.scene.control.Tooltip("文字颜色"));
         canvasPicker.setTooltip(new javafx.scene.control.Tooltip("画布背景色"));
+        connectionPicker.setTooltip(new javafx.scene.control.Tooltip("连接线颜色"));
         fillPicker.setMinWidth(120);
         borderPicker.setMinWidth(120);
         textPicker.setMinWidth(105);
         canvasPicker.setMinWidth(120);
+        connectionPicker.setMinWidth(120);
         fillPicker.setOnAction(event -> controller.changeFillColor(fillPicker.getValue()));
         borderPicker.setOnAction(event -> controller.changeBorderColor(borderPicker.getValue()));
         textPicker.setOnAction(event -> controller.changeTextColor(textPicker.getValue()));
         canvasPicker.setOnAction(event -> {
             if (!updatingControls) {
                 controller.changeCanvasColor(canvasPicker.getValue());
+            }
+        });
+        connectionPicker.setOnAction(event -> {
+            if (!updatingControls) {
+                controller.changeConnectionColor(connectionPicker.getValue());
             }
         });
         fontBox.getItems().addAll("Microsoft YaHei UI", "SimSun", "SimHei", "KaiTi", "Arial");
@@ -108,6 +128,38 @@ public class ToolbarPanel extends VBox {
         fontSizeBox.setTooltip(new javafx.scene.control.Tooltip("字号"));
         fontSizeBox.setMinWidth(82);
         fontSizeBox.setOnAction(event -> controller.changeFontSize(fontSizeBox.getValue()));
+        connectionWidthBox.getItems().addAll(1.0, 1.5, 2.0, 2.2, 3.0, 4.0, 6.0, 8.0);
+        connectionWidthBox.setValue(2.2);
+        connectionWidthBox.setTooltip(new javafx.scene.control.Tooltip("连接线粗细"));
+        connectionWidthBox.setMinWidth(86);
+        connectionWidthBox.setOnAction(event -> {
+            if (!updatingControls && connectionWidthBox.getValue() != null) {
+                controller.changeConnectionWidth(connectionWidthBox.getValue());
+            }
+        });
+        connectionDashedButton.getStyleClass().add("tool-button");
+        connectionDashedButton.setTooltip(new javafx.scene.control.Tooltip("实线 / 虚线"));
+        connectionDashedButton.setMinWidth(Region.USE_PREF_SIZE);
+        connectionDashedButton.setOnAction(event -> {
+            if (!updatingControls) {
+                controller.toggleConnectionDashed();
+            }
+        });
+        ToggleGroup connectionShapeGroup = new ToggleGroup();
+        curveConnectionButton.setToggleGroup(connectionShapeGroup);
+        elbowConnectionButton.setToggleGroup(connectionShapeGroup);
+        curveConnectionButton.setTooltip(new javafx.scene.control.Tooltip("曲线连接"));
+        elbowConnectionButton.setTooltip(new javafx.scene.control.Tooltip("折线连接"));
+        curveConnectionButton.setOnAction(event -> {
+            if (!updatingControls) {
+                controller.changeConnectionShape(ConnectionShape.CURVE);
+            }
+        });
+        elbowConnectionButton.setOnAction(event -> {
+            if (!updatingControls) {
+                controller.changeConnectionShape(ConnectionShape.ELBOW);
+            }
+        });
 
         HBox startPage = ribbonPage(
                 ribbonGroup("文字", fontBox, fontSizeBox,
@@ -116,9 +168,9 @@ public class ToolbarPanel extends VBox {
                         iconButton("U", "下划线", controller::toggleUnderline),
                         iconButton("S", "删除线", controller::toggleStrikethrough),
                         textPicker,
-                        iconButton("≡", "左对齐", () -> controller.changeTextAlignment(javafx.scene.text.TextAlignment.LEFT)),
-                        iconButton("≣", "居中对齐", () -> controller.changeTextAlignment(javafx.scene.text.TextAlignment.CENTER)),
-                        iconButton("≡", "右对齐", () -> controller.changeTextAlignment(javafx.scene.text.TextAlignment.RIGHT))),
+                        alignmentButton(TextAlignIcon.LEFT, "左对齐", () -> controller.changeTextAlignment(javafx.scene.text.TextAlignment.LEFT)),
+                        alignmentButton(TextAlignIcon.CENTER, "居中对齐", () -> controller.changeTextAlignment(javafx.scene.text.TextAlignment.CENTER)),
+                        alignmentButton(TextAlignIcon.RIGHT, "右对齐", () -> controller.changeTextAlignment(javafx.scene.text.TextAlignment.RIGHT))),
                 ribbonGroup("颜色", fillPicker, borderPicker),
                 ribbonGroup("节点",
                         button("子节点", "添加子节点", controller::addChildNode),
@@ -133,6 +185,8 @@ public class ToolbarPanel extends VBox {
         );
         HBox stylePage = ribbonPage(
                 ribbonGroup("画布", canvasPicker),
+                ribbonGroup("连接线", connectionPicker, connectionWidthBox, connectionDashedButton,
+                        curveConnectionButton, elbowConnectionButton),
                 ribbonGroup("常用样式",
                         button("白底", "设置选中节点为白色填充", () -> controller.changeFillColor(Color.WHITE)),
                         button("蓝底", "设置选中节点为蓝色填充", () -> controller.changeFillColor(Color.web("#2563EB"))),
@@ -149,7 +203,8 @@ public class ToolbarPanel extends VBox {
                         button("另存为", "另存为 .mindmap 文件", controller::saveMapAs)),
                 ribbonGroup("导出",
                         button("PNG", "导出 PNG 图片", controller::exportPng),
-                        button("JPG", "导出 JPG 图片", controller::exportJpg))
+                        button("JPG", "导出 JPG 图片", controller::exportJpg),
+                        button("PDF", "导出 PDF 文档", controller::exportPdf))
         );
 
         StackPane ribbonPages = new StackPane(startPage, stylePage, layoutPage, exportPage);
@@ -222,6 +277,20 @@ public class ToolbarPanel extends VBox {
         updatingControls = false;
     }
 
+    public void updateConnectionStyle(Color color, double width, boolean dashed, ConnectionShape shape) {
+        updatingControls = true;
+        connectionPicker.setValue(color == null ? Color.web("#94A3B8") : color);
+        connectionWidthBox.setValue(width);
+        connectionDashedButton.setSelected(dashed);
+        connectionDashedButton.setText(dashed ? "虚线" : "实线");
+        if (shape == ConnectionShape.ELBOW) {
+            elbowConnectionButton.setSelected(true);
+        } else {
+            curveConnectionButton.setSelected(true);
+        }
+        updatingControls = false;
+    }
+
     public void updateState(boolean hasSelection, boolean canAddSibling, boolean canDelete, boolean canCollapse,
                             boolean canUndo, boolean canRedo, LayoutType layoutType) {
         addSiblingButton.setDisable(!canAddSibling);
@@ -279,6 +348,37 @@ public class ToolbarPanel extends VBox {
         Button button = button(text, tooltip, action);
         button.getStyleClass().add("icon-tool-button");
         return button;
+    }
+
+    private Button alignmentButton(TextAlignIcon icon, String tooltip, Runnable action) {
+        Button button = iconButton("", tooltip, action);
+        button.getStyleClass().add("alignment-tool-button");
+        button.setGraphic(alignmentIcon(icon));
+        return button;
+    }
+
+    private Node alignmentIcon(TextAlignIcon icon) {
+        VBox lines = new VBox(4);
+        lines.getStyleClass().add("align-icon");
+        lines.setMinSize(22, 20);
+        lines.setPrefSize(22, 20);
+        lines.setMaxSize(22, 20);
+        lines.setAlignment(switch (icon) {
+            case LEFT -> Pos.CENTER_LEFT;
+            case CENTER -> Pos.CENTER;
+            case RIGHT -> Pos.CENTER_RIGHT;
+        });
+        lines.getChildren().addAll(alignLine(18), alignLine(12), alignLine(18));
+        return lines;
+    }
+
+    private Region alignLine(double width) {
+        Region line = new Region();
+        line.getStyleClass().add("align-icon-line");
+        line.setMinSize(width, 2);
+        line.setPrefSize(width, 2);
+        line.setMaxSize(width, 2);
+        return line;
     }
 
     private ToggleButton ribbonTab(String text) {

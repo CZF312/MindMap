@@ -1,9 +1,12 @@
 package com.example.mindmap.view;
 
 import com.example.mindmap.controller.MindMapController;
+import com.example.mindmap.model.ConnectionShape;
+import com.example.mindmap.model.ConnectionStyle;
 import com.example.mindmap.model.MindMap;
 import com.example.mindmap.model.MindNode;
 import com.example.mindmap.model.NodeStyle;
+import javafx.application.Platform;
 import javafx.geometry.Bounds;
 import javafx.geometry.Insets;
 import javafx.geometry.Point2D;
@@ -13,8 +16,11 @@ import javafx.scene.Group;
 import javafx.scene.SnapshotParameters;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
+import javafx.scene.control.Menu;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.ScrollPane.ScrollBarPolicy;
+import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.TextField;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.image.WritableImage;
@@ -25,7 +31,12 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.CubicCurve;
+import javafx.scene.shape.LineTo;
+import javafx.scene.shape.MoveTo;
+import javafx.scene.shape.Path;
 import javafx.scene.shape.Rectangle;
+import javafx.scene.shape.Shape;
+import javafx.scene.shape.StrokeLineCap;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextAlignment;
 import javafx.scene.text.Font;
@@ -42,12 +53,23 @@ import java.util.Map;
 import java.util.Set;
 
 public class MindMapCanvas extends ScrollPane {
+    private static final double CANVAS_PADDING_X = 220;
+    private static final double CANVAS_PADDING_Y = 180;
+
     private final MindMapController controller;
+    private final StackPane canvasHost = new StackPane();
     private final Pane canvasPane = new Pane();
     private final Group contentGroup = new Group();
     private final Map<String, StackPane> nodeViews = new HashMap<>();
+    private final Map<String, ConnectionView> connectionViews = new HashMap<>();
     private final Set<String> searchIds = new HashSet<>();
+    private final Set<String> selectedConnectionIds = new HashSet<>();
     private MindMap map;
+    private double lastZoom = 1.0;
+    private double lastCanvasWidth;
+    private double lastCanvasHeight;
+    private double lastCanvasOffsetX;
+    private double lastCanvasOffsetY;
     private double dragLastX;
     private double dragLastY;
     private Point2D selectionStart;
@@ -59,15 +81,36 @@ public class MindMapCanvas extends ScrollPane {
         TOP_LEFT, TOP, TOP_RIGHT, RIGHT, BOTTOM_RIGHT, BOTTOM, BOTTOM_LEFT, LEFT
     }
 
+    private record ConnectionView(Shape visual, Shape hitArea, MindNode parent, MindNode child) {
+    }
+
     public MindMapCanvas(MindMapController controller) {
         this.controller = controller;
         getStyleClass().add("canvas-scroll");
+        canvasHost.getStyleClass().add("canvas-host");
+        canvasHost.setAlignment(Pos.CENTER);
         canvasPane.getStyleClass().add("canvas-pane");
         canvasPane.getChildren().add(contentGroup);
-        setContent(canvasPane);
+        canvasHost.getChildren().add(canvasPane);
+        setContent(canvasHost);
         setPannable(true);
         setFitToWidth(false);
         setFitToHeight(false);
+        setHbarPolicy(ScrollBarPolicy.ALWAYS);
+        setVbarPolicy(ScrollBarPolicy.ALWAYS);
+        viewportBoundsProperty().addListener((observable, oldValue, newValue) -> updateCanvasHostSize());
+        canvasHost.setOnMouseReleased(event -> {
+            if (!event.isControlDown() && event.getButton() == MouseButton.PRIMARY && event.getTarget() == canvasHost) {
+                controller.clearSelection();
+                event.consume();
+            }
+        });
+        canvasHost.setOnContextMenuRequested(event -> {
+            if (event.getTarget() == canvasHost) {
+                canvasContextMenu().show(canvasHost, event.getScreenX(), event.getScreenY());
+                event.consume();
+            }
+        });
         canvasPane.setOnMousePressed(event -> {
             if (event.isControlDown() && event.getButton() == MouseButton.PRIMARY && event.getTarget() == canvasPane) {
                 selectionStart = contentGroup.sceneToLocal(event.getSceneX(), event.getSceneY());
@@ -109,6 +152,12 @@ public class MindMapCanvas extends ScrollPane {
                 event.consume();
             }
         });
+        canvasPane.setOnContextMenuRequested(event -> {
+            if (event.getTarget() == canvasPane) {
+                canvasContextMenu().show(canvasPane, event.getScreenX(), event.getScreenY());
+                event.consume();
+            }
+        });
         addEventFilter(ScrollEvent.SCROLL, event -> {
             if (!event.isControlDown() || event.getDeltaY() == 0) {
                 return;
@@ -122,25 +171,50 @@ public class MindMapCanvas extends ScrollPane {
         });
     }
 
-    public void refresh(MindMap map, Set<String> selectedIds, Set<String> searchIds) {
+    public void refresh(MindMap map, Set<String> selectedIds, Set<String> selectedConnectionIds, Set<String> searchIds) {
+        MindMap previousMap = this.map;
+        double oldZoom = lastZoom;
+        Point2D oldCenter = previousMap == map ? getViewportLogicalCenter(oldZoom) : null;
         this.map = map;
         this.searchIds.clear();
         this.searchIds.addAll(searchIds);
+        this.selectedConnectionIds.clear();
+        this.selectedConnectionIds.addAll(selectedConnectionIds);
         contentGroup.getChildren().clear();
         nodeViews.clear();
+        connectionViews.clear();
         if (map == null || map.getRoot() == null) {
             return;
         }
+        CanvasMetrics metrics = measureCanvas(map);
+        boolean viewportAnchorChanged = oldCenter != null && (
+                Math.abs(map.getZoom() - oldZoom) > 0.0001
+                        || Math.abs(metrics.width() - lastCanvasWidth) > 0.0001
+                        || Math.abs(metrics.height() - lastCanvasHeight) > 0.0001
+                        || Math.abs(metrics.offsetX() - lastCanvasOffsetX) > 0.0001
+                        || Math.abs(metrics.offsetY() - lastCanvasOffsetY) > 0.0001
+        );
         contentGroup.getTransforms().setAll(new Scale(map.getZoom(), map.getZoom(), 0, 0));
+        contentGroup.setLayoutX(metrics.offsetX() * map.getZoom());
+        contentGroup.setLayoutY(metrics.offsetY() * map.getZoom());
         canvasPane.setStyle("-fx-background-color: " + NodeStyle.toHex(map.getCanvasColor()) + ";");
         canvasPane.setPrefSize(
-                controller.preferredCanvasWidth() * map.getZoom(),
-                controller.preferredCanvasHeight() * map.getZoom()
+                metrics.width() * map.getZoom(),
+                metrics.height() * map.getZoom()
         );
+        updateCanvasHostSize();
         drawConnections();
         for (MindNode node : map.visibleNodes()) {
             drawNode(node, selectedIds.contains(node.getId()), searchIds.contains(node.getId()));
         }
+        if (viewportAnchorChanged) {
+            Platform.runLater(() -> centerViewportOn(oldCenter));
+        }
+        lastZoom = map.getZoom();
+        lastCanvasWidth = metrics.width();
+        lastCanvasHeight = metrics.height();
+        lastCanvasOffsetX = metrics.offsetX();
+        lastCanvasOffsetY = metrics.offsetY();
     }
 
     private void drawConnections() {
@@ -149,23 +223,103 @@ public class MindMapCanvas extends ScrollPane {
             if (parent == null || !map.visibleNodes().contains(parent)) {
                 continue;
             }
-            CubicCurve curve = new CubicCurve();
-            double startX = parent.getCenterX();
-            double startY = parent.getCenterY();
-            double endX = node.getCenterX();
-            double endY = node.getCenterY();
-            double controlOffset = Math.max(80, Math.abs(endX - startX) * 0.5);
-            curve.setStartX(startX);
-            curve.setStartY(startY);
-            curve.setControlX1(startX + (endX > startX ? controlOffset : -controlOffset));
-            curve.setControlY1(startY);
-            curve.setControlX2(endX + (endX > startX ? -controlOffset : controlOffset));
-            curve.setControlY2(endY);
-            curve.setEndX(endX);
-            curve.setEndY(endY);
-            curve.getStyleClass().add("connector");
-            contentGroup.getChildren().add(curve);
+            Shape visual = createConnectionShape(node.getConnectionStyle().getShape());
+            Shape hitArea = createConnectionShape(node.getConnectionStyle().getShape());
+            boolean selected = selectedConnectionIds.contains(node.getId());
+            styleConnection(visual, node.getConnectionStyle(), selected);
+            styleConnectionHitArea(hitArea);
+            updateConnectionShape(visual, parent, node);
+            updateConnectionShape(hitArea, parent, node);
+            installConnectionHandlers(visual, node);
+            installConnectionHandlers(hitArea, node);
+            contentGroup.getChildren().addAll(visual, hitArea);
+            connectionViews.put(connectionKey(parent, node), new ConnectionView(visual, hitArea, parent, node));
         }
+    }
+
+    private Shape createConnectionShape(ConnectionShape shape) {
+        return shape == ConnectionShape.ELBOW ? new Path() : new CubicCurve();
+    }
+
+    private void styleConnection(Shape shape, ConnectionStyle style, boolean selected) {
+        shape.getStyleClass().add("connector");
+        Color strokeColor = selected ? Color.web("#2563EB") : style.getColor();
+        double strokeWidth = selected ? Math.max(style.getWidth() + 1.4, 3.2) : style.getWidth();
+        shape.setStyle("-fx-stroke: " + NodeStyle.toHex(strokeColor) + ";"
+                + "-fx-stroke-width: " + strokeWidth + ";"
+                + "-fx-fill: transparent;");
+        shape.setFill(Color.TRANSPARENT);
+        shape.setStroke(strokeColor);
+        shape.setStrokeWidth(strokeWidth);
+        shape.setStrokeLineCap(StrokeLineCap.ROUND);
+        shape.getStrokeDashArray().clear();
+        if (style.isDashed()) {
+            shape.getStrokeDashArray().addAll(12.0, 8.0);
+        }
+    }
+
+    private void styleConnectionHitArea(Shape shape) {
+        shape.setFill(Color.TRANSPARENT);
+        shape.setStroke(Color.TRANSPARENT);
+        shape.setStrokeWidth(14);
+        shape.setStrokeLineCap(StrokeLineCap.ROUND);
+        shape.setCursor(Cursor.HAND);
+    }
+
+    private void installConnectionHandlers(Shape shape, MindNode child) {
+        shape.setOnMouseClicked(event -> {
+            if (event.getButton() == MouseButton.PRIMARY) {
+                controller.selectConnection(child.getId(), event.isControlDown());
+                event.consume();
+            }
+        });
+        shape.setOnContextMenuRequested(event -> {
+            controller.prepareConnectionForContext(child.getId());
+            connectionContextMenu(child).show(shape, event.getScreenX(), event.getScreenY());
+            event.consume();
+        });
+    }
+
+    private void updateConnectionShape(Shape shape, MindNode parent, MindNode node) {
+        if (shape instanceof CubicCurve curve) {
+            updateCurve(curve, parent, node);
+        } else if (shape instanceof Path path) {
+            updateElbow(path, parent, node);
+        }
+    }
+
+    private void updateCurve(CubicCurve curve, MindNode parent, MindNode node) {
+        double startX = parent.getCenterX();
+        double startY = parent.getCenterY();
+        double endX = node.getCenterX();
+        double endY = node.getCenterY();
+        double controlOffset = Math.max(80, Math.abs(endX - startX) * 0.5);
+        curve.setStartX(startX);
+        curve.setStartY(startY);
+        curve.setControlX1(startX + (endX > startX ? controlOffset : -controlOffset));
+        curve.setControlY1(startY);
+        curve.setControlX2(endX + (endX > startX ? -controlOffset : controlOffset));
+        curve.setControlY2(endY);
+        curve.setEndX(endX);
+        curve.setEndY(endY);
+    }
+
+    private void updateElbow(Path path, MindNode parent, MindNode node) {
+        double startX = parent.getCenterX();
+        double startY = parent.getCenterY();
+        double endX = node.getCenterX();
+        double endY = node.getCenterY();
+        double midX = (startX + endX) / 2.0;
+        path.getElements().setAll(
+                new MoveTo(startX, startY),
+                new LineTo(midX, startY),
+                new LineTo(midX, endY),
+                new LineTo(endX, endY)
+        );
+    }
+
+    private String connectionKey(MindNode parent, MindNode node) {
+        return parent.getId() + "->" + node.getId();
     }
 
     private void drawNode(MindNode node, boolean selected, boolean searchHit) {
@@ -227,6 +381,7 @@ public class MindMapCanvas extends ScrollPane {
                 dragging = dragging || Math.abs(dx) + Math.abs(dy) > 0.6;
                 controller.dragSelectedBy(dx, dy);
                 updateMovedNodeViews();
+                updateMovedConnections();
                 event.consume();
             }
         });
@@ -245,7 +400,7 @@ public class MindMapCanvas extends ScrollPane {
         });
         box.setOnMouseClicked(event -> {
             if (event.getButton() == MouseButton.SECONDARY) {
-                controller.selectNode(node, false);
+                controller.prepareNodeForDrag(node, false);
                 contextMenu(node).show(box, event.getScreenX(), event.getScreenY());
                 event.consume();
             }
@@ -329,6 +484,7 @@ public class MindMapCanvas extends ScrollPane {
                 box.setPrefSize(node.getWidth(), node.getHeight());
                 box.setMinSize(node.getWidth(), node.getHeight());
                 box.setMaxSize(node.getWidth(), node.getHeight());
+                updateMovedConnections();
                 for (javafx.scene.Node child : contentGroup.getChildren()) {
                     if (child instanceof Rectangle rectangle && rectangle.getProperties().get("resizeHandle") instanceof ResizeHandle h
                             && node.getId().equals(rectangle.getProperties().get("nodeId"))) {
@@ -399,6 +555,23 @@ public class MindMapCanvas extends ScrollPane {
         }
     }
 
+    private void updateMovedConnections() {
+        if (map == null) {
+            return;
+        }
+        for (MindNode node : map.visibleNodes()) {
+            MindNode parent = node.getParent();
+            if (parent == null) {
+                continue;
+            }
+            ConnectionView view = connectionViews.get(connectionKey(parent, node));
+            if (view != null) {
+                updateConnectionShape(view.visual(), parent, node);
+                updateConnectionShape(view.hitArea(), parent, node);
+            }
+        }
+    }
+
     private void placeHandle(Rectangle marker, MindNode node, ResizeHandle handle) {
         double x = node.getX();
         double y = node.getY();
@@ -453,21 +626,93 @@ public class MindMapCanvas extends ScrollPane {
 
     private ContextMenu contextMenu(MindNode node) {
         ContextMenu menu = new ContextMenu();
-        MenuItem addChild = new MenuItem("添加子节点");
-        addChild.setOnAction(event -> controller.addChildNode());
-        MenuItem addSibling = new MenuItem("添加兄弟节点");
+        MenuItem rename = menuItem("编辑文本", controller::renameSelectedNode);
+        MenuItem addChild = menuItem("添加子节点", controller::addChildNode);
+        MenuItem addSibling = menuItem("添加兄弟节点", controller::addSiblingNode);
         addSibling.setDisable(node.isRoot());
-        addSibling.setOnAction(event -> controller.addSiblingNode());
-        MenuItem rename = new MenuItem("重命名");
-        rename.setOnAction(event -> controller.renameSelectedNode());
-        MenuItem delete = new MenuItem("删除");
-        delete.setDisable(node.isRoot());
-        delete.setOnAction(event -> controller.deleteSelectedNodes());
-        MenuItem toggle = new MenuItem(node.isCollapsed() ? "展开" : "折叠");
+        MenuItem toggle = menuItem(node.isCollapsed() ? "展开分支" : "折叠分支", controller::toggleCollapse);
         toggle.setDisable(node.getChildren().isEmpty());
-        toggle.setOnAction(event -> controller.toggleCollapse());
-        menu.getItems().addAll(addChild, addSibling, rename, delete, toggle);
+        Menu styleMenu = new Menu("节点样式");
+        styleMenu.getItems().addAll(
+                menuItem("白底深字", () -> controller.applyNodePreset(Color.WHITE, Color.web("#0F172A"))),
+                menuItem("蓝底白字", () -> controller.applyNodePreset(Color.web("#2563EB"), Color.WHITE)),
+                menuItem("浅黄底", () -> controller.changeFillColor(Color.web("#FEF3C7"))),
+                new SeparatorMenuItem(),
+                menuItem("左对齐", () -> controller.changeTextAlignment(TextAlignment.LEFT)),
+                menuItem("居中对齐", () -> controller.changeTextAlignment(TextAlignment.CENTER)),
+                menuItem("右对齐", () -> controller.changeTextAlignment(TextAlignment.RIGHT))
+        );
+        MenuItem delete = menuItem("删除节点", controller::deleteSelectedNodes);
+        delete.setDisable(node.isRoot());
+        menu.getItems().addAll(rename, new SeparatorMenuItem(), addChild, addSibling, toggle,
+                new SeparatorMenuItem(), styleMenu, new SeparatorMenuItem(), delete);
         return menu;
+    }
+
+    private ContextMenu canvasContextMenu() {
+        ContextMenu menu = new ContextMenu();
+        Menu layoutMenu = new Menu("布局");
+        layoutMenu.getItems().addAll(
+                menuItem("自动布局", () -> controller.changeLayout(com.example.mindmap.model.LayoutType.AUTO)),
+                menuItem("左侧布局", () -> controller.changeLayout(com.example.mindmap.model.LayoutType.LEFT)),
+                menuItem("右侧布局", () -> controller.changeLayout(com.example.mindmap.model.LayoutType.RIGHT))
+        );
+        Menu viewMenu = new Menu("视图");
+        viewMenu.getItems().addAll(
+                menuItem("放大", controller::zoomIn),
+                menuItem("缩小", controller::zoomOut),
+                menuItem("100%", controller::resetZoom),
+                menuItem("适应窗口", controller::fitToWindow)
+        );
+        Menu connectionMenu = new Menu("连接线");
+        connectionMenu.getItems().addAll(
+                menuItem(map != null && map.isConnectionDashed() ? "切换为实线" : "切换为虚线", controller::toggleConnectionDashed),
+                new SeparatorMenuItem(),
+                menuItem("细线", () -> controller.changeConnectionWidth(1.5)),
+                menuItem("标准线", () -> controller.changeConnectionWidth(2.2)),
+                menuItem("粗线", () -> controller.changeConnectionWidth(4.0)),
+                new SeparatorMenuItem(),
+                menuItem("曲线", () -> controller.changeConnectionShape(ConnectionShape.CURVE)),
+                menuItem("折线", () -> controller.changeConnectionShape(ConnectionShape.ELBOW))
+        );
+        Menu canvasMenu = new Menu("画布背景");
+        canvasMenu.getItems().addAll(
+                menuItem("白色", () -> controller.changeCanvasColor(Color.WHITE)),
+                menuItem("浅灰", () -> controller.changeCanvasColor(Color.web("#F8FAFC"))),
+                menuItem("浅黄", () -> controller.changeCanvasColor(Color.web("#FFF7ED")))
+        );
+        menu.getItems().addAll(
+                menuItem("查找替换", controller::showFindReplaceDialog),
+                new SeparatorMenuItem(),
+                menuItem("全部展开", controller::expandAll),
+                menuItem("全部收起", controller::collapseAll),
+                new SeparatorMenuItem(),
+                layoutMenu,
+                viewMenu,
+                connectionMenu,
+                canvasMenu
+        );
+        return menu;
+    }
+
+    private ContextMenu connectionContextMenu(MindNode child) {
+        ContextMenu menu = new ContextMenu();
+        menu.getItems().addAll(
+                menuItem("曲线", () -> controller.changeConnectionShape(ConnectionShape.CURVE)),
+                menuItem("折线", () -> controller.changeConnectionShape(ConnectionShape.ELBOW)),
+                new SeparatorMenuItem(),
+                menuItem(child.getConnectionStyle().isDashed() ? "切换为实线" : "切换为虚线", controller::toggleConnectionDashed),
+                menuItem("细线", () -> controller.changeConnectionWidth(1.5)),
+                menuItem("标准线", () -> controller.changeConnectionWidth(2.2)),
+                menuItem("粗线", () -> controller.changeConnectionWidth(4.0))
+        );
+        return menu;
+    }
+
+    private MenuItem menuItem(String text, Runnable action) {
+        MenuItem item = new MenuItem(text);
+        item.setOnAction(event -> action.run());
+        return item;
     }
 
     private void updateSelectionBox(Point2D current) {
@@ -486,14 +731,77 @@ public class MindMapCanvas extends ScrollPane {
 
     public void scrollToNode(String nodeId) {
         StackPane node = nodeViews.get(nodeId);
-        if (node == null || canvasPane.getWidth() == 0 || canvasPane.getHeight() == 0) {
+        if (node == null || canvasHost.getWidth() == 0 || canvasHost.getHeight() == 0) {
             return;
         }
         Bounds viewport = getViewportBounds();
-        double targetX = (node.getLayoutX() * map.getZoom()) - viewport.getWidth() / 2 + node.getWidth() * map.getZoom() / 2;
-        double targetY = (node.getLayoutY() * map.getZoom()) - viewport.getHeight() / 2 + node.getHeight() * map.getZoom() / 2;
-        setHvalue(clamp(targetX / Math.max(1, canvasPane.getWidth() - viewport.getWidth())));
-        setVvalue(clamp(targetY / Math.max(1, canvasPane.getHeight() - viewport.getHeight())));
+        double targetX = canvasPane.getLayoutX() + contentGroup.getLayoutX() + (node.getLayoutX() * map.getZoom())
+                - viewport.getWidth() / 2 + node.getWidth() * map.getZoom() / 2;
+        double targetY = canvasPane.getLayoutY() + contentGroup.getLayoutY() + (node.getLayoutY() * map.getZoom())
+                - viewport.getHeight() / 2 + node.getHeight() * map.getZoom() / 2;
+        setHvalue(clamp(targetX / Math.max(1, canvasHost.getWidth() - viewport.getWidth())));
+        setVvalue(clamp(targetY / Math.max(1, canvasHost.getHeight() - viewport.getHeight())));
+    }
+
+    private CanvasMetrics measureCanvas(MindMap map) {
+        double baseWidth = controller.preferredCanvasWidth();
+        double baseHeight = controller.preferredCanvasHeight();
+        if (map == null || map.getRoot() == null || map.visibleNodes().isEmpty()) {
+            return new CanvasMetrics(baseWidth, baseHeight, 0, 0);
+        }
+        double minX = Double.MAX_VALUE;
+        double minY = Double.MAX_VALUE;
+        double maxX = -Double.MAX_VALUE;
+        double maxY = -Double.MAX_VALUE;
+        for (MindNode node : map.visibleNodes()) {
+            minX = Math.min(minX, node.getX());
+            minY = Math.min(minY, node.getY());
+            maxX = Math.max(maxX, node.getX() + node.getWidth());
+            maxY = Math.max(maxY, node.getY() + node.getHeight());
+        }
+        double offsetX = minX < 0 ? -minX + CANVAS_PADDING_X : 0;
+        double offsetY = minY < 0 ? -minY + CANVAS_PADDING_Y : 0;
+        double width = Math.max(baseWidth, offsetX + maxX + CANVAS_PADDING_X);
+        double height = Math.max(baseHeight, offsetY + maxY + CANVAS_PADDING_Y);
+        return new CanvasMetrics(width, height, offsetX, offsetY);
+    }
+
+    private void updateCanvasHostSize() {
+        Bounds viewport = getViewportBounds();
+        double width = Math.max(canvasPane.getPrefWidth(), viewport.getWidth());
+        double height = Math.max(canvasPane.getPrefHeight(), viewport.getHeight());
+        canvasHost.setMinSize(width, height);
+        canvasHost.setPrefSize(width, height);
+    }
+
+    private Point2D getViewportLogicalCenter(double zoom) {
+        Bounds viewport = getViewportBounds();
+        if (map == null || viewport.getWidth() <= 0 || viewport.getHeight() <= 0) {
+            return null;
+        }
+        double scrollX = getHvalue() * Math.max(1, canvasHost.getWidth() - viewport.getWidth());
+        double scrollY = getVvalue() * Math.max(1, canvasHost.getHeight() - viewport.getHeight());
+        double safeZoom = Math.max(0.0001, zoom);
+        double logicalX = (scrollX + viewport.getWidth() / 2 - canvasPane.getLayoutX() - contentGroup.getLayoutX()) / safeZoom;
+        double logicalY = (scrollY + viewport.getHeight() / 2 - canvasPane.getLayoutY() - contentGroup.getLayoutY()) / safeZoom;
+        return new Point2D(logicalX, logicalY);
+    }
+
+    private void centerViewportOn(Point2D logicalCenter) {
+        if (map == null) {
+            return;
+        }
+        updateCanvasHostSize();
+        canvasHost.applyCss();
+        canvasHost.layout();
+        Bounds viewport = getViewportBounds();
+        double targetX = canvasPane.getLayoutX() + contentGroup.getLayoutX() + logicalCenter.getX() * map.getZoom() - viewport.getWidth() / 2;
+        double targetY = canvasPane.getLayoutY() + contentGroup.getLayoutY() + logicalCenter.getY() * map.getZoom() - viewport.getHeight() / 2;
+        setHvalue(clamp(targetX / Math.max(1, canvasHost.getWidth() - viewport.getWidth())));
+        setVvalue(clamp(targetY / Math.max(1, canvasHost.getHeight() - viewport.getHeight())));
+    }
+
+    private record CanvasMetrics(double width, double height, double offsetX, double offsetY) {
     }
 
     public WritableImage snapshotFull() {

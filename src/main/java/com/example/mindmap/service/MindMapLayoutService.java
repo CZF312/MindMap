@@ -14,6 +14,8 @@ public class MindMapLayoutService {
     private static final double V_GAP = 38;
     private static final double MIN_SUBTREE_HEIGHT = 82;
     private static final double MIN_CANVAS = 1400;
+    private static final double CANVAS_PADDING_X = 220;
+    private static final double CANVAS_PADDING_Y = 180;
 
     public void layout(MindMap map) {
         if (map == null || map.getRoot() == null) {
@@ -105,18 +107,40 @@ public class MindMapLayoutService {
     }
 
     public double preferredWidth(MindMap map) {
-        double max = MIN_CANVAS;
-        for (MindNode node : map.visibleNodes()) {
-            max = Math.max(max, node.getX() + node.getWidth() + 180);
+        CanvasBounds bounds = canvasBounds(map);
+        if (bounds == null) {
+            return MIN_CANVAS;
         }
-        return max;
+        double leftExpansion = bounds.minX() < 0 ? -bounds.minX() + CANVAS_PADDING_X : 0;
+        return Math.max(MIN_CANVAS, leftExpansion + bounds.maxX() + CANVAS_PADDING_X);
     }
 
     public double preferredHeight(MindMap map) {
-        double max = MIN_CANVAS * 0.7;
-        for (MindNode node : map.visibleNodes()) {
-            max = Math.max(max, node.getY() + node.getHeight() + 160);
+        CanvasBounds bounds = canvasBounds(map);
+        if (bounds == null) {
+            return MIN_CANVAS * 0.7;
         }
-        return max;
+        double topExpansion = bounds.minY() < 0 ? -bounds.minY() + CANVAS_PADDING_Y : 0;
+        return Math.max(MIN_CANVAS * 0.7, topExpansion + bounds.maxY() + CANVAS_PADDING_Y);
+    }
+
+    private CanvasBounds canvasBounds(MindMap map) {
+        if (map == null || map.getRoot() == null || map.visibleNodes().isEmpty()) {
+            return null;
+        }
+        double minX = Double.MAX_VALUE;
+        double minY = Double.MAX_VALUE;
+        double maxX = -Double.MAX_VALUE;
+        double maxY = -Double.MAX_VALUE;
+        for (MindNode node : map.visibleNodes()) {
+            minX = Math.min(minX, node.getX());
+            minY = Math.min(minY, node.getY());
+            maxX = Math.max(maxX, node.getX() + node.getWidth());
+            maxY = Math.max(maxY, node.getY() + node.getHeight());
+        }
+        return new CanvasBounds(minX, minY, maxX, maxY);
+    }
+
+    private record CanvasBounds(double minX, double minY, double maxX, double maxY) {
     }
 }

@@ -10,21 +10,50 @@ import javax.imageio.ImageWriter;
 import javax.imageio.stream.ImageOutputStream;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
+import java.util.zip.DeflaterOutputStream;
 
 public class ImageExportService {
     private static final double EXPORT_SCALE = 2.0;
     private static final float JPEG_QUALITY = 0.95f;
 
     public void exportPng(MindMapCanvas canvas, Path path) throws IOException {
-        write(canvas.snapshotFull(EXPORT_SCALE), path, "png");
+        exportPng(createExportSnapshot(canvas), path);
     }
 
     public void exportJpg(MindMapCanvas canvas, Path path) throws IOException {
-        write(canvas.snapshotFull(EXPORT_SCALE), path, "jpg");
+        exportJpg(createExportSnapshot(canvas), path);
+    }
+
+    public void exportPdf(MindMapCanvas canvas, Path path) throws IOException {
+        exportPdf(createExportSnapshot(canvas), path);
+    }
+
+    public WritableImage createExportSnapshot(MindMapCanvas canvas) {
+        return canvas.snapshotFull(EXPORT_SCALE);
+    }
+
+    public void exportPng(WritableImage image, Path path) throws IOException {
+        write(image, path, "png");
+    }
+
+    public void exportJpg(WritableImage image, Path path) throws IOException {
+        write(image, path, "jpg");
+    }
+
+    public void exportPdf(WritableImage image, Path path) throws IOException {
+        if (path.getParent() != null) {
+            Files.createDirectories(path.getParent());
+        }
+        BufferedImage buffered = toBufferedImage(image, true);
+        writePdf(buffered, path);
     }
 
     private void write(WritableImage image, Path path, String format) throws IOException {
@@ -57,6 +86,87 @@ public class ImageExportService {
         } finally {
             writer.dispose();
         }
+    }
+
+    private void writePdf(BufferedImage image, Path path) throws IOException {
+        int width = image.getWidth();
+        int height = image.getHeight();
+        byte[] imageData = deflateRgb(image);
+        double pageWidth = width / EXPORT_SCALE;
+        double pageHeight = height / EXPORT_SCALE;
+        String content = "q\n" + format(pageWidth) + " 0 0 " + format(pageHeight) + " 0 0 cm\n/Im0 Do\nQ\n";
+        byte[] contentData = content.getBytes(StandardCharsets.US_ASCII);
+
+        List<byte[]> objects = new ArrayList<>();
+        objects.add(ascii("<< /Type /Catalog /Pages 2 0 R >>\n"));
+        objects.add(ascii("<< /Type /Pages /Kids [3 0 R] /Count 1 >>\n"));
+        objects.add(ascii("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + format(pageWidth) + " "
+                + format(pageHeight) + "] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\n"));
+        objects.add(join(
+                ascii("<< /Type /XObject /Subtype /Image /Width " + width + " /Height " + height
+                        + " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length "
+                        + imageData.length + " >>\nstream\n"),
+                imageData,
+                ascii("\nendstream\n")));
+        objects.add(join(
+                ascii("<< /Length " + contentData.length + " >>\nstream\n"),
+                contentData,
+                ascii("endstream\n")));
+
+        ByteArrayOutputStream pdf = new ByteArrayOutputStream();
+        pdf.write(ascii("%PDF-1.4\n%"));
+        pdf.write(new byte[]{(byte) 0xE2, (byte) 0xE3, (byte) 0xCF, (byte) 0xD3});
+        pdf.write(ascii("\n"));
+        List<Integer> offsets = new ArrayList<>();
+        offsets.add(0);
+        for (int i = 0; i < objects.size(); i++) {
+            offsets.add(pdf.size());
+            pdf.write(ascii((i + 1) + " 0 obj\n"));
+            pdf.write(objects.get(i));
+            pdf.write(ascii("endobj\n"));
+        }
+        int xrefOffset = pdf.size();
+        pdf.write(ascii("xref\n0 " + offsets.size() + "\n"));
+        pdf.write(ascii("0000000000 65535 f \n"));
+        for (int i = 1; i < offsets.size(); i++) {
+            pdf.write(ascii(String.format("%010d 00000 n \n", offsets.get(i))));
+        }
+        pdf.write(ascii("trailer\n<< /Size " + offsets.size() + " /Root 1 0 R >>\nstartxref\n"
+                + xrefOffset + "\n%%EOF\n"));
+        Files.write(path, pdf.toByteArray());
+    }
+
+    private byte[] deflateRgb(BufferedImage image) throws IOException {
+        ByteArrayOutputStream raw = new ByteArrayOutputStream(image.getWidth() * image.getHeight() * 3);
+        for (int y = 0; y < image.getHeight(); y++) {
+            for (int x = 0; x < image.getWidth(); x++) {
+                int rgb = image.getRGB(x, y);
+                raw.write((rgb >> 16) & 0xFF);
+                raw.write((rgb >> 8) & 0xFF);
+                raw.write(rgb & 0xFF);
+            }
+        }
+        ByteArrayOutputStream compressed = new ByteArrayOutputStream();
+        try (DeflaterOutputStream deflater = new DeflaterOutputStream(compressed)) {
+            raw.writeTo(deflater);
+        }
+        return compressed.toByteArray();
+    }
+
+    private String format(double value) {
+        return String.format(java.util.Locale.US, "%.2f", value);
+    }
+
+    private byte[] ascii(String text) {
+        return text.getBytes(StandardCharsets.ISO_8859_1);
+    }
+
+    private byte[] join(byte[]... parts) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        for (byte[] part : parts) {
+            output.write(part);
+        }
+        return output.toByteArray();
     }
 
     private BufferedImage toBufferedImage(WritableImage image, boolean opaque) {

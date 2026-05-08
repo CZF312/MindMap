@@ -8,6 +8,8 @@ import com.example.mindmap.command.DeleteNodeCommand;
 import com.example.mindmap.command.MoveNodeCommand;
 import com.example.mindmap.command.RenameNodeCommand;
 import com.example.mindmap.command.ToggleCollapseCommand;
+import com.example.mindmap.model.ConnectionShape;
+import com.example.mindmap.model.ConnectionStyle;
 import com.example.mindmap.model.LayoutType;
 import com.example.mindmap.model.MindMap;
 import com.example.mindmap.model.MindNode;
@@ -20,16 +22,22 @@ import com.example.mindmap.service.SearchService;
 import com.example.mindmap.util.Dialogs;
 import com.example.mindmap.view.MainFrame;
 import javafx.application.Platform;
+import javafx.concurrent.Task;
+import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
+import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputControl;
+import javafx.scene.image.WritableImage;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.TextAlignment;
 import javafx.stage.FileChooser;
@@ -60,6 +68,10 @@ public class MindMapController {
     private MindMap currentMap = new MindMap();
     private MindMap dragBefore;
     private int searchIndex = -1;
+
+    private enum ExportFormat {
+        PNG, JPG, PDF
+    }
 
     public MindMapController(Stage stage) {
         this.stage = stage;
@@ -160,34 +172,100 @@ public class MindMapController {
     }
 
     public void exportPng() {
-        exportImage("导出 PNG 图片", ".png", true);
+        exportImage("导出 PNG 图片", ".png", ExportFormat.PNG);
     }
 
     public void exportJpg() {
-        exportImage("导出 JPG 图片", ".jpg", false);
+        exportImage("导出 JPG 图片", ".jpg", ExportFormat.JPG);
     }
 
-    private void exportImage(String title, String extension, boolean png) {
+    public void exportPdf() {
+        exportImage("导出 PDF 文档", ".pdf", ExportFormat.PDF);
+    }
+
+    private void exportImage(String title, String extension, ExportFormat format) {
         FileChooser chooser = new FileChooser();
         chooser.setTitle(title);
-        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(extension.toUpperCase() + " 图片", "*" + extension));
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(extension.toUpperCase() + " 文件", "*" + extension));
         Path path = showSave(chooser);
         if (path == null) {
             mainFrame.setStatus("已取消导出");
             return;
         }
-        path = ensureExtension(path, extension);
+        Path exportPath = ensureExtension(path, extension);
+        Label messageLabel = new Label("正在生成高清画布快照...");
+        ProgressBar progressBar = new ProgressBar(ProgressBar.INDETERMINATE_PROGRESS);
+        Dialog<Void> progressDialog = exportProgressDialog(messageLabel, progressBar);
+        progressDialog.show();
+        mainFrame.setStatus("正在导出：" + exportPath);
+        Platform.runLater(() -> startExportTask(format, exportPath, progressDialog, messageLabel, progressBar));
+    }
+
+    private Dialog<Void> exportProgressDialog(Label message, ProgressBar progress) {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.initOwner(stage);
+        dialog.setTitle("正在导出");
+        dialog.setHeaderText(null);
+        message.getStyleClass().add("export-progress-message");
+        progress.getStyleClass().add("export-progress-bar");
+        progress.setPrefWidth(340);
+        VBox content = new VBox(12, message, progress);
+        content.setPadding(new Insets(16));
+        dialog.getDialogPane().setContent(content);
+        ButtonType hideButton = new ButtonType("后台运行", ButtonType.CANCEL.getButtonData());
+        dialog.getDialogPane().getButtonTypes().setAll(hideButton);
+        return dialog;
+    }
+
+    private void startExportTask(ExportFormat format, Path path, Dialog<Void> dialog,
+                                 Label messageLabel, ProgressBar progressBar) {
+        WritableImage snapshot;
         try {
-            if (png) {
-                imageExportService.exportPng(mainFrame.getCanvas(), path);
-            } else {
-                imageExportService.exportJpg(mainFrame.getCanvas(), path);
-            }
-            mainFrame.setStatus("导出成功：" + path);
+            snapshot = imageExportService.createExportSnapshot(mainFrame.getCanvas());
         } catch (Exception ex) {
+            dialog.hide();
             Dialogs.error(stage, "导出失败", ex.getMessage());
             mainFrame.setStatus("导出失败");
+            return;
         }
+        Task<Void> task = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
+                updateMessage("正在写入 " + formatLabel(format) + " 文件...");
+                updateProgress(ProgressBar.INDETERMINATE_PROGRESS, 1);
+            switch (format) {
+                    case PNG -> imageExportService.exportPng(snapshot, path);
+                    case JPG -> imageExportService.exportJpg(snapshot, path);
+                    case PDF -> imageExportService.exportPdf(snapshot, path);
+                }
+                updateMessage("导出完成");
+                updateProgress(1, 1);
+                return null;
+            }
+        };
+        messageLabel.textProperty().bind(task.messageProperty());
+        progressBar.progressProperty().bind(task.progressProperty());
+        task.setOnSucceeded(event -> {
+            dialog.hide();
+            mainFrame.setStatus("导出成功：" + path);
+        });
+        task.setOnFailed(event -> {
+            dialog.hide();
+            Throwable ex = task.getException();
+            Dialogs.error(stage, "导出失败", ex == null ? "未知错误" : ex.getMessage());
+            mainFrame.setStatus("导出失败");
+        });
+        Thread thread = new Thread(task, "mindmap-export");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private String formatLabel(ExportFormat format) {
+        return switch (format) {
+            case PNG -> "PNG";
+            case JPG -> "JPG";
+            case PDF -> "PDF";
+        };
     }
 
     public void addChildNode() {
@@ -324,9 +402,74 @@ public class MindMapController {
         updateSelectedTextStyle(style -> style.setAlignment(alignment), "已设置文本对齐");
     }
 
+    public void applyNodePreset(Color fillColor, Color textColor) {
+        List<String> ids = new ArrayList<>(selectionModel.getSelectedNodeIds());
+        if (ids.isEmpty()) {
+            notice("请先选择一个或多个节点");
+            return;
+        }
+        executeAndRefresh(new ChangeStyleCommand(currentMap, () -> {
+            for (String id : ids) {
+                find(id).ifPresent(node -> {
+                    node.getStyle().setFillColor(fillColor);
+                    node.getStyle().setTextColor(textColor);
+                });
+            }
+        }), "已应用节点样式", false);
+    }
+
     public void changeCanvasColor(Color color) {
         executeAndRefresh(new ChangeStyleCommand(currentMap, () -> currentMap.setCanvasColor(color)),
                 "已设置画布背景色", false);
+    }
+
+    public void changeConnectionColor(Color color) {
+        updateConnectionStyle(style -> style.setColor(color),
+                () -> currentMap.setConnectionColor(color), "已设置连接线颜色");
+    }
+
+    public void changeConnectionWidth(double width) {
+        updateConnectionStyle(style -> style.setWidth(width),
+                () -> currentMap.setConnectionWidth(width), "已设置连接线粗细");
+    }
+
+    public void toggleConnectionDashed() {
+        boolean dashed = !activeConnectionStyle().isDashed();
+        updateConnectionStyle(style -> style.setDashed(dashed),
+                () -> currentMap.setConnectionDashed(dashed),
+                dashed ? "已切换为虚线" : "已切换为实线");
+    }
+
+    public void changeConnectionShape(ConnectionShape shape) {
+        updateConnectionStyle(style -> style.setShape(shape),
+                () -> currentMap.setConnectionShape(shape),
+                "已设置连接线样式：" + shape.getLabel());
+    }
+
+    private void updateConnectionStyle(java.util.function.Consumer<ConnectionStyle> selectedChange,
+                                       Runnable defaultChange,
+                                       String status) {
+        List<String> ids = new ArrayList<>(selectionModel.getSelectedConnectionIds());
+        executeAndRefresh(new ChangeStyleCommand(currentMap, () -> {
+            if (ids.isEmpty()) {
+                defaultChange.run();
+            } else {
+                for (String id : ids) {
+                    find(id).ifPresent(node -> selectedChange.accept(node.getConnectionStyle()));
+                }
+            }
+        }), status, false);
+    }
+
+    private ConnectionStyle activeConnectionStyle() {
+        String id = selectionModel.getPrimaryConnectionId();
+        if (id != null) {
+            Optional<MindNode> node = find(id);
+            if (node.isPresent()) {
+                return node.get().getConnectionStyle();
+            }
+        }
+        return currentMap.defaultConnectionStyle();
     }
 
     private void changeSelectedStyle(Color color, boolean fill) {
@@ -567,6 +710,19 @@ public class MindMapController {
         refreshAll("已选中节点：" + live.getText(), false);
     }
 
+    public void selectConnection(String childNodeId, boolean toggle) {
+        MindNode child = find(childNodeId).orElse(null);
+        if (child == null || child.getParent() == null) {
+            return;
+        }
+        if (toggle) {
+            selectionModel.toggleConnection(childNodeId);
+        } else {
+            selectionModel.selectOnlyConnection(childNodeId);
+        }
+        refreshAll("已选中连线：" + child.getParent().getText() + " → " + child.getText(), false);
+    }
+
     public void prepareNodeForDrag(MindNode node, boolean toggle) {
         MindNode live = find(node.getId()).orElse(node);
         if (!selectionModel.contains(live)) {
@@ -575,6 +731,13 @@ public class MindMapController {
             } else {
                 selectionModel.selectOnly(live);
             }
+        }
+    }
+
+    public void prepareConnectionForContext(String childNodeId) {
+        MindNode child = find(childNodeId).orElse(null);
+        if (child != null && child.getParent() != null && !selectionModel.containsConnection(childNodeId)) {
+            selectionModel.selectOnlyConnection(childNodeId);
         }
     }
 
@@ -691,10 +854,12 @@ public class MindMapController {
         }
         Set<String> searchIds = new HashSet<>(searchResultIds);
         selectionModel.getSelectedNodeIds().removeIf(id -> find(id).isEmpty());
+        selectionModel.getSelectedConnectionIds().removeIf(id -> find(id).map(MindNode::getParent).isEmpty());
         if (selectionModel.getPrimaryNodeId() != null && find(selectionModel.getPrimaryNodeId()).isEmpty()) {
             selectionModel.selectOnly(currentMap.getRoot());
         }
-        mainFrame.getCanvas().refresh(currentMap, selectionModel.getSelectedNodeIds(), searchIds);
+        mainFrame.getCanvas().refresh(currentMap, selectionModel.getSelectedNodeIds(),
+                selectionModel.getSelectedConnectionIds(), searchIds);
         mainFrame.getTreePanel().refresh(currentMap, selectionModel.getPrimaryNodeId());
         mainFrame.getToolbarPanel().updateState(primaryNode() != null,
                 primaryNode() != null && !primaryNode().isRoot(),
@@ -704,6 +869,9 @@ public class MindMapController {
                 !redoStack.isEmpty(),
                 currentMap.getLayoutType());
         mainFrame.getToolbarPanel().updateCanvasColor(currentMap.getCanvasColor());
+        ConnectionStyle connectionStyle = activeConnectionStyle();
+        mainFrame.getToolbarPanel().updateConnectionStyle(connectionStyle.getColor(),
+                connectionStyle.getWidth(), connectionStyle.isDashed(), connectionStyle.getShape());
         refreshRecentFiles();
         mainFrame.setStatus(status);
         mainFrame.setZoom(currentMap.getZoom());

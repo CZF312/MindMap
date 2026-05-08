@@ -125,6 +125,21 @@
     -fx-padding: 7 9;
 }
 
+.alignment-tool-button {
+    -fx-min-width: 36;
+    -fx-pref-width: 36;
+    -fx-padding: 7 7;
+}
+
+.alignment-tool-button > .graphic {
+    -fx-padding: 0;
+}
+
+.align-icon-line {
+    -fx-background-color: #172033;
+    -fx-background-radius: 2;
+}
+
 .layout-button:selected {
     -fx-background-color: #2563eb;
     -fx-border-color: #1d4ed8;
@@ -164,6 +179,10 @@
     -fx-background: #d9dee7;
     -fx-background-color: #d9dee7;
     -fx-border-color: transparent;
+}
+
+.canvas-host {
+    -fx-background-color: #d9dee7;
 }
 
 .canvas-pane {

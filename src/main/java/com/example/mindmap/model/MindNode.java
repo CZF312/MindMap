@@ -18,6 +18,7 @@ public class MindNode {
     private double offsetY;
     private boolean collapsed;
     private NodeStyle style = new NodeStyle();
+    private ConnectionStyle connectionStyle = new ConnectionStyle();
 
     public MindNode(String id, String text) {
         this.id = Objects.requireNonNull(id);
@@ -166,6 +167,14 @@ public class MindNode {
         this.style = style == null ? new NodeStyle() : style;
     }
 
+    public ConnectionStyle getConnectionStyle() {
+        return connectionStyle;
+    }
+
+    public void setConnectionStyle(ConnectionStyle connectionStyle) {
+        this.connectionStyle = connectionStyle == null ? new ConnectionStyle() : connectionStyle;
+    }
+
     public boolean contains(double px, double py) {
         return px >= x && px <= x + width && py >= y && py <= y + height;
     }
@@ -194,6 +203,7 @@ public class MindNode {
         copy.offsetY = offsetY;
         copy.collapsed = collapsed;
         copy.style = style.copy();
+        copy.connectionStyle = connectionStyle.copy();
         for (MindNode child : children) {
             copy.addChild(child.deepCopy());
         }

@@ -1,6 +1,8 @@
 package com.example.mindmap.service;
 
 import com.example.mindmap.model.LayoutType;
+import com.example.mindmap.model.ConnectionShape;
+import com.example.mindmap.model.ConnectionStyle;
 import com.example.mindmap.model.MindMap;
 import com.example.mindmap.model.MindNode;
 import com.example.mindmap.model.NodeStyle;
@@ -36,11 +38,15 @@ public class MindMapFileService {
         map.setName(rootElement.getAttribute("name"));
         map.setLayoutType(parseLayout(rootElement.getAttribute("layout")));
         map.setCanvasColor(NodeStyle.fromHex(rootElement.getAttribute("background"), Color.WHITE));
+        map.setConnectionColor(NodeStyle.fromHex(rootElement.getAttribute("connectionColor"), Color.web("#94A3B8")));
+        map.setConnectionWidth(parseDouble(rootElement.getAttribute("connectionWidth"), 2.2));
+        map.setConnectionDashed(Boolean.parseBoolean(rootElement.getAttribute("connectionDashed")));
+        map.setConnectionShape(parseConnectionShape(rootElement.getAttribute("connectionShape")));
         NodeList roots = rootElement.getElementsByTagName("node");
         if (roots.getLength() == 0) {
             throw new IOException("文件中没有中心节点");
         }
-        map.setRoot(readNode((Element) roots.item(0)));
+        map.setRoot(readNode((Element) roots.item(0), map.defaultConnectionStyle()));
         map.setFilePath(path);
         map.setModified(false);
         map.bumpNextIdFromExistingNodes();
@@ -59,6 +65,10 @@ public class MindMapFileService {
         root.setAttribute("name", map.getName());
         root.setAttribute("layout", map.getLayoutType().name());
         root.setAttribute("background", NodeStyle.toHex(map.getCanvasColor()));
+        root.setAttribute("connectionColor", NodeStyle.toHex(map.getConnectionColor()));
+        root.setAttribute("connectionWidth", String.valueOf(map.getConnectionWidth()));
+        root.setAttribute("connectionDashed", String.valueOf(map.isConnectionDashed()));
+        root.setAttribute("connectionShape", map.getConnectionShape().name());
         document.appendChild(root);
         root.appendChild(writeNode(document, map.getRoot()));
 
@@ -92,13 +102,17 @@ public class MindMapFileService {
         element.setAttribute("underline", String.valueOf(node.getStyle().isUnderline()));
         element.setAttribute("strikethrough", String.valueOf(node.getStyle().isStrikethrough()));
         element.setAttribute("alignment", node.getStyle().getAlignment().name());
+        element.setAttribute("connectionColor", NodeStyle.toHex(node.getConnectionStyle().getColor()));
+        element.setAttribute("connectionWidth", String.valueOf(node.getConnectionStyle().getWidth()));
+        element.setAttribute("connectionDashed", String.valueOf(node.getConnectionStyle().isDashed()));
+        element.setAttribute("connectionShape", node.getConnectionStyle().getShape().name());
         for (MindNode child : node.getChildren()) {
             element.appendChild(writeNode(document, child));
         }
         return element;
     }
 
-    private MindNode readNode(Element element) {
+    private MindNode readNode(Element element, ConnectionStyle defaultConnectionStyle) {
         MindNode node = new MindNode(attribute(element, "id", "node-1"), attribute(element, "text", "新节点"));
         node.setX(parseDouble(element.getAttribute("x"), 0));
         node.setY(parseDouble(element.getAttribute("y"), 0));
@@ -120,10 +134,20 @@ public class MindMapFileService {
         style.setStrikethrough(Boolean.parseBoolean(element.getAttribute("strikethrough")));
         style.setAlignment(parseAlignment(element.getAttribute("alignment")));
         node.setStyle(style);
+        ConnectionStyle connectionStyle = new ConnectionStyle();
+        connectionStyle.setColor(NodeStyle.fromHex(element.getAttribute("connectionColor"), defaultConnectionStyle.getColor()));
+        connectionStyle.setWidth(parseDouble(element.getAttribute("connectionWidth"), defaultConnectionStyle.getWidth()));
+        connectionStyle.setDashed(element.hasAttribute("connectionDashed")
+                ? Boolean.parseBoolean(element.getAttribute("connectionDashed"))
+                : defaultConnectionStyle.isDashed());
+        connectionStyle.setShape(element.hasAttribute("connectionShape")
+                ? parseConnectionShape(element.getAttribute("connectionShape"))
+                : defaultConnectionStyle.getShape());
+        node.setConnectionStyle(connectionStyle);
         NodeList children = element.getChildNodes();
         for (int i = 0; i < children.getLength(); i++) {
             if (children.item(i) instanceof Element child && "node".equals(child.getTagName())) {
-                node.addChild(readNode(child));
+                node.addChild(readNode(child, defaultConnectionStyle));
             }
         }
         return node;
@@ -150,6 +174,14 @@ public class MindMapFileService {
             return TextAlignment.valueOf(value);
         } catch (IllegalArgumentException | NullPointerException ex) {
             return TextAlignment.CENTER;
+        }
+    }
+
+    private ConnectionShape parseConnectionShape(String value) {
+        try {
+            return ConnectionShape.valueOf(value);
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            return ConnectionShape.CURVE;
         }
     }
 

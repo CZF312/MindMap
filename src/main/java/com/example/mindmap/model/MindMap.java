@@ -17,6 +17,10 @@ public class MindMap {
     private boolean modified;
     private double zoom = 1.0;
     private Color canvasColor = Color.WHITE;
+    private Color connectionColor = Color.web("#94A3B8");
+    private double connectionWidth = 2.2;
+    private boolean connectionDashed;
+    private ConnectionShape connectionShape = ConnectionShape.CURVE;
     private long nextId = 1;
 
     public MindMap() {
@@ -31,7 +35,9 @@ public class MindMap {
     }
 
     public MindNode createNode(String text) {
-        return new MindNode(nextNodeId(), text);
+        MindNode node = new MindNode(nextNodeId(), text);
+        node.setConnectionStyle(defaultConnectionStyle());
+        return node;
     }
 
     public Optional<MindNode> findNodeById(String id) {
@@ -83,6 +89,10 @@ public class MindMap {
         copy.modified = modified;
         copy.zoom = zoom;
         copy.canvasColor = canvasColor;
+        copy.connectionColor = connectionColor;
+        copy.connectionWidth = connectionWidth;
+        copy.connectionDashed = connectionDashed;
+        copy.connectionShape = connectionShape;
         copy.nextId = nextId;
         return copy;
     }
@@ -95,6 +105,10 @@ public class MindMap {
         modified = other.modified;
         zoom = other.zoom;
         canvasColor = other.canvasColor;
+        connectionColor = other.connectionColor;
+        connectionWidth = other.connectionWidth;
+        connectionDashed = other.connectionDashed;
+        connectionShape = other.connectionShape;
         nextId = other.nextId;
     }
 
@@ -168,5 +182,46 @@ public class MindMap {
 
     public void setCanvasColor(Color canvasColor) {
         this.canvasColor = canvasColor == null ? Color.WHITE : canvasColor;
+    }
+
+    public Color getConnectionColor() {
+        return connectionColor;
+    }
+
+    public void setConnectionColor(Color connectionColor) {
+        this.connectionColor = connectionColor == null ? Color.web("#94A3B8") : connectionColor;
+    }
+
+    public double getConnectionWidth() {
+        return connectionWidth;
+    }
+
+    public void setConnectionWidth(double connectionWidth) {
+        this.connectionWidth = Math.max(1.0, Math.min(8.0, connectionWidth));
+    }
+
+    public boolean isConnectionDashed() {
+        return connectionDashed;
+    }
+
+    public void setConnectionDashed(boolean connectionDashed) {
+        this.connectionDashed = connectionDashed;
+    }
+
+    public ConnectionShape getConnectionShape() {
+        return connectionShape;
+    }
+
+    public void setConnectionShape(ConnectionShape connectionShape) {
+        this.connectionShape = connectionShape == null ? ConnectionShape.CURVE : connectionShape;
+    }
+
+    public ConnectionStyle defaultConnectionStyle() {
+        ConnectionStyle style = new ConnectionStyle();
+        style.setColor(connectionColor);
+        style.setWidth(connectionWidth);
+        style.setDashed(connectionDashed);
+        style.setShape(connectionShape);
+        return style;
     }
 }
