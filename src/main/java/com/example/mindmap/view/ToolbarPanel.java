@@ -23,6 +23,13 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.SVGPath;
+import javafx.scene.shape.StrokeLineCap;
+import javafx.scene.shape.StrokeLineJoin;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontPosture;
+import javafx.scene.text.FontWeight;
+import javafx.scene.text.Text;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -34,8 +41,8 @@ public class ToolbarPanel extends VBox {
     private final Button addSiblingButton = button("兄弟", "为主选中节点添加兄弟节点");
     private final Button deleteButton = button("删除", "删除选中节点");
     private final Button renameButton = button("重命名", "修改主选中节点文本");
-    private final Button undoButton = button("撤销", "撤销上一次编辑");
-    private final Button redoButton = button("重做", "重做上一次撤销");
+    private final Button undoButton = button("", "撤销上一次编辑");
+    private final Button redoButton = button("", "重做上一次撤销");
     private final Button collapseButton = button("折叠", "折叠或展开主选中节点");
     private final TextField searchField = new TextField();
     private final TextField replaceField = new TextField();
@@ -47,6 +54,10 @@ public class ToolbarPanel extends VBox {
     private final ComboBox<String> fontBox = new ComboBox<>();
     private final ComboBox<Integer> fontSizeBox = new ComboBox<>();
     private final ComboBox<Double> connectionWidthBox = new ComboBox<>();
+    private final ToggleButton boldButton = textStyleButton(TextStyleIcon.BOLD, "加粗");
+    private final ToggleButton italicButton = textStyleButton(TextStyleIcon.ITALIC, "斜体");
+    private final ToggleButton underlineButton = textStyleButton(TextStyleIcon.UNDERLINE, "下划线");
+    private final ToggleButton strikethroughButton = textStyleButton(TextStyleIcon.STRIKETHROUGH, "删除线");
     private final ToggleButton connectionDashedButton = new ToggleButton("虚线");
     private final ToggleButton curveConnectionButton = layoutButton("曲线");
     private final ToggleButton elbowConnectionButton = layoutButton("折线");
@@ -61,6 +72,10 @@ public class ToolbarPanel extends VBox {
 
     private enum TextAlignIcon {
         LEFT, CENTER, RIGHT
+    }
+
+    private enum TextStyleIcon {
+        BOLD, ITALIC, UNDERLINE, STRIKETHROUGH
     }
 
     public ToolbarPanel(MindMapController controller) {
@@ -103,11 +118,26 @@ public class ToolbarPanel extends VBox {
         fillPicker.setMinWidth(120);
         borderPicker.setMinWidth(120);
         textPicker.setMinWidth(105);
+        HBox fillColorControl = labeledColorPicker(fillPicker, "节点背景", "■", "node-background-picker");
+        HBox borderColorControl = labeledColorPicker(borderPicker, "节点边框", "□", "node-border-picker");
+        HBox textColorControl = labeledColorPicker(textPicker, "文字颜色", "A", "text-color-picker");
         canvasPicker.setMinWidth(120);
         connectionPicker.setMinWidth(120);
-        fillPicker.setOnAction(event -> controller.changeFillColor(fillPicker.getValue()));
-        borderPicker.setOnAction(event -> controller.changeBorderColor(borderPicker.getValue()));
-        textPicker.setOnAction(event -> controller.changeTextColor(textPicker.getValue()));
+        fillPicker.setOnAction(event -> {
+            if (!updatingControls) {
+                controller.changeFillColor(fillPicker.getValue());
+            }
+        });
+        borderPicker.setOnAction(event -> {
+            if (!updatingControls) {
+                controller.changeBorderColor(borderPicker.getValue());
+            }
+        });
+        textPicker.setOnAction(event -> {
+            if (!updatingControls) {
+                controller.changeTextColor(textPicker.getValue());
+            }
+        });
         canvasPicker.setOnAction(event -> {
             if (!updatingControls) {
                 controller.changeCanvasColor(canvasPicker.getValue());
@@ -128,6 +158,26 @@ public class ToolbarPanel extends VBox {
         fontSizeBox.setTooltip(new javafx.scene.control.Tooltip("字号"));
         fontSizeBox.setMinWidth(82);
         fontSizeBox.setOnAction(event -> controller.changeFontSize(fontSizeBox.getValue()));
+        boldButton.setOnAction(event -> {
+            if (!updatingControls) {
+                controller.toggleBold();
+            }
+        });
+        italicButton.setOnAction(event -> {
+            if (!updatingControls) {
+                controller.toggleItalic();
+            }
+        });
+        underlineButton.setOnAction(event -> {
+            if (!updatingControls) {
+                controller.toggleUnderline();
+            }
+        });
+        strikethroughButton.setOnAction(event -> {
+            if (!updatingControls) {
+                controller.toggleStrikethrough();
+            }
+        });
         connectionWidthBox.getItems().addAll(1.0, 1.5, 2.0, 2.2, 3.0, 4.0, 6.0, 8.0);
         connectionWidthBox.setValue(2.2);
         connectionWidthBox.setTooltip(new javafx.scene.control.Tooltip("连接线粗细"));
@@ -163,15 +213,15 @@ public class ToolbarPanel extends VBox {
 
         HBox startPage = ribbonPage(
                 ribbonGroup("文字", fontBox, fontSizeBox,
-                        iconButton("B", "加粗", controller::toggleBold),
-                        iconButton("I", "斜体", controller::toggleItalic),
-                        iconButton("U", "下划线", controller::toggleUnderline),
-                        iconButton("S", "删除线", controller::toggleStrikethrough),
-                        textPicker,
+                        boldButton,
+                        italicButton,
+                        underlineButton,
+                        strikethroughButton,
+                        textColorControl,
                         alignmentButton(TextAlignIcon.LEFT, "左对齐", () -> controller.changeTextAlignment(javafx.scene.text.TextAlignment.LEFT)),
                         alignmentButton(TextAlignIcon.CENTER, "居中对齐", () -> controller.changeTextAlignment(javafx.scene.text.TextAlignment.CENTER)),
                         alignmentButton(TextAlignIcon.RIGHT, "右对齐", () -> controller.changeTextAlignment(javafx.scene.text.TextAlignment.RIGHT))),
-                ribbonGroup("颜色", fillPicker, borderPicker),
+                ribbonGroup("颜色", fillColorControl, borderColorControl),
                 ribbonGroup("节点",
                         button("子节点", "添加子节点", controller::addChildNode),
                         addSiblingButton,
@@ -180,17 +230,12 @@ public class ToolbarPanel extends VBox {
                         collapseButton,
                         button("全部展开", "展开所有节点", controller::expandAll),
                         button("全部收起", "收起所有分支", controller::collapseAll)),
-                ribbonGroup("编辑", undoButton, redoButton),
                 ribbonGroup("查找", button("⌕ 查找替换", "打开查找替换窗口", controller::showFindReplaceDialog))
         );
         HBox stylePage = ribbonPage(
                 ribbonGroup("画布", canvasPicker),
                 ribbonGroup("连接线", connectionPicker, connectionWidthBox, connectionDashedButton,
-                        curveConnectionButton, elbowConnectionButton),
-                ribbonGroup("常用样式",
-                        button("白底", "设置选中节点为白色填充", () -> controller.changeFillColor(Color.WHITE)),
-                        button("蓝底", "设置选中节点为蓝色填充", () -> controller.changeFillColor(Color.web("#2563EB"))),
-                        button("浅黄", "设置选中节点为浅黄色填充", () -> controller.changeFillColor(Color.web("#FEF3C7"))))
+                        curveConnectionButton, elbowConnectionButton)
         );
         HBox layoutPage = ribbonPage(
                 ribbonGroup("分布方式", autoLayout, leftLayout, rightLayout)
@@ -228,7 +273,11 @@ public class ToolbarPanel extends VBox {
         Region rightSpacer = new Region();
         HBox.setHgrow(leftSpacer, Priority.ALWAYS);
         HBox.setHgrow(rightSpacer, Priority.ALWAYS);
-        HBox ribbonHeader = new HBox(12, fileButton, leftSpacer, tabRow, rightSpacer);
+        Region quickSeparator = new Region();
+        quickSeparator.getStyleClass().add("quick-action-separator");
+        HBox quickActions = new HBox(4, quickSeparator, undoButton, redoButton);
+        quickActions.getStyleClass().add("quick-actions");
+        HBox ribbonHeader = new HBox(12, fileButton, quickActions, leftSpacer, tabRow, rightSpacer);
         ribbonHeader.getStyleClass().add("ribbon-header");
 
         ScrollPane toolScroller = new ScrollPane(ribbonPages);
@@ -243,6 +292,10 @@ public class ToolbarPanel extends VBox {
         addSiblingButton.setOnAction(event -> controller.addSiblingNode());
         deleteButton.setOnAction(event -> controller.deleteSelectedNodes());
         renameButton.setOnAction(event -> controller.renameSelectedNode());
+        undoButton.getStyleClass().add("quick-action-button");
+        redoButton.getStyleClass().add("quick-action-button");
+        undoButton.setGraphic(quickActionIcon(false));
+        redoButton.setGraphic(quickActionIcon(true));
         undoButton.setOnAction(event -> controller.undo());
         redoButton.setOnAction(event -> controller.redo());
         collapseButton.setOnAction(event -> controller.toggleCollapse());
@@ -277,6 +330,23 @@ public class ToolbarPanel extends VBox {
         updatingControls = false;
     }
 
+    public void updateNodeStyle(Color fillColor, Color borderColor, Color textColor) {
+        updatingControls = true;
+        fillPicker.setValue(fillColor == null ? Color.WHITE : fillColor);
+        borderPicker.setValue(borderColor == null ? Color.web("#CBD5E1") : borderColor);
+        textPicker.setValue(textColor == null ? Color.web("#0F172A") : textColor);
+        updatingControls = false;
+    }
+
+    public void updateTextStyle(boolean bold, boolean italic, boolean underline, boolean strikethrough) {
+        updatingControls = true;
+        boldButton.setSelected(bold);
+        italicButton.setSelected(italic);
+        underlineButton.setSelected(underline);
+        strikethroughButton.setSelected(strikethrough);
+        updatingControls = false;
+    }
+
     public void updateConnectionStyle(Color color, double width, boolean dashed, ConnectionShape shape) {
         updatingControls = true;
         connectionPicker.setValue(color == null ? Color.web("#94A3B8") : color);
@@ -297,6 +367,10 @@ public class ToolbarPanel extends VBox {
         deleteButton.setDisable(!canDelete);
         renameButton.setDisable(!hasSelection);
         collapseButton.setDisable(!canCollapse);
+        boldButton.setDisable(!hasSelection);
+        italicButton.setDisable(!hasSelection);
+        underlineButton.setDisable(!hasSelection);
+        strikethroughButton.setDisable(!hasSelection);
         undoButton.setDisable(!canUndo);
         redoButton.setDisable(!canRedo);
         if (layoutType == LayoutType.LEFT) {
@@ -329,6 +403,41 @@ public class ToolbarPanel extends VBox {
         return item;
     }
 
+    private HBox labeledColorPicker(ColorPicker picker, String text, String icon, String styleClass) {
+        picker.setAccessibleText(text);
+        picker.getStyleClass().add("compact-color-picker");
+        picker.setStyle("-fx-color-label-visible: false;");
+        picker.setMinWidth(42);
+        picker.setPrefWidth(42);
+        picker.setMaxWidth(42);
+        Label label = new Label(icon + "  " + text);
+        label.getStyleClass().add("labeled-color-text");
+        HBox box = new HBox(6, label, picker);
+        box.getStyleClass().addAll("labeled-color-picker", styleClass);
+        box.setAlignment(Pos.CENTER_LEFT);
+        box.setMinWidth(142);
+        box.setPrefWidth(142);
+        box.setOnMouseClicked(event -> {
+            if (!isInsidePicker(event.getTarget(), picker)) {
+                picker.show();
+            }
+        });
+        return box;
+    }
+
+    private boolean isInsidePicker(Object target, ColorPicker picker) {
+        if (!(target instanceof Node node)) {
+            return false;
+        }
+        while (node != null) {
+            if (node == picker) {
+                return true;
+            }
+            node = node.getParent();
+        }
+        return false;
+    }
+
     private Button button(String text, String tooltip) {
         return button(text, tooltip, null);
     }
@@ -348,6 +457,50 @@ public class ToolbarPanel extends VBox {
         Button button = button(text, tooltip, action);
         button.getStyleClass().add("icon-tool-button");
         return button;
+    }
+
+    private ToggleButton textStyleButton(TextStyleIcon icon, String tooltip) {
+        ToggleButton button = new ToggleButton();
+        button.getStyleClass().add("text-style-button");
+        button.setGraphic(textStyleIcon(icon));
+        button.setMinSize(36, 36);
+        button.setPrefSize(36, 36);
+        button.setMaxSize(36, 36);
+        button.setTooltip(new javafx.scene.control.Tooltip(tooltip));
+        button.setAccessibleText(tooltip);
+        return button;
+    }
+
+    private Node textStyleIcon(TextStyleIcon icon) {
+        Text text = new Text(switch (icon) {
+            case BOLD -> "B";
+            case ITALIC -> "I";
+            case UNDERLINE -> "U";
+            case STRIKETHROUGH -> "S";
+        });
+        text.getStyleClass().add("text-style-icon");
+        text.setFont(Font.font("Microsoft YaHei UI",
+                icon == TextStyleIcon.BOLD ? FontWeight.BOLD : FontWeight.NORMAL,
+                icon == TextStyleIcon.ITALIC ? FontPosture.ITALIC : FontPosture.REGULAR,
+                17));
+        text.setUnderline(icon == TextStyleIcon.UNDERLINE);
+        text.setStrikethrough(icon == TextStyleIcon.STRIKETHROUGH);
+        text.setMouseTransparent(true);
+        return text;
+    }
+
+    private Node quickActionIcon(boolean redo) {
+        SVGPath icon = new SVGPath();
+        icon.setContent(redo
+                ? "M 15 6 L 20 11 L 15 16 M 19 11 H 10 C 6 11 4 14 4 18"
+                : "M 9 6 L 4 11 L 9 16 M 5 11 H 14 C 18 11 20 14 20 18");
+        icon.setFill(Color.TRANSPARENT);
+        icon.setStroke(Color.web("#64748B"));
+        icon.setStrokeWidth(2.2);
+        icon.setStrokeLineCap(StrokeLineCap.ROUND);
+        icon.setStrokeLineJoin(StrokeLineJoin.ROUND);
+        icon.setMouseTransparent(true);
+        return icon;
     }
 
     private Button alignmentButton(TextAlignIcon icon, String tooltip, Runnable action) {

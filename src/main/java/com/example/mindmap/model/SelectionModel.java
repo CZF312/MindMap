@@ -55,6 +55,29 @@ public class SelectionModel {
         }
     }
 
+    public void selectAll(Collection<MindNode> nodes, Collection<String> connectionIds) {
+        selectedNodeIds.clear();
+        selectedConnectionIds.clear();
+        primaryNodeId = null;
+        primaryConnectionId = null;
+        if (nodes != null) {
+            for (MindNode node : nodes) {
+                if (node != null) {
+                    selectedNodeIds.add(node.getId());
+                    primaryNodeId = node.getId();
+                }
+            }
+        }
+        if (connectionIds != null) {
+            for (String connectionId : connectionIds) {
+                if (connectionId != null) {
+                    selectedConnectionIds.add(connectionId);
+                    primaryConnectionId = connectionId;
+                }
+            }
+        }
+    }
+
     public boolean contains(MindNode node) {
         return node != null && selectedNodeIds.contains(node.getId());
     }

@@ -81,7 +81,9 @@ public class MindMapCanvas extends ScrollPane {
         TOP_LEFT, TOP, TOP_RIGHT, RIGHT, BOTTOM_RIGHT, BOTTOM, BOTTOM_LEFT, LEFT
     }
 
-    private record ConnectionView(Shape visual, Shape hitArea, MindNode parent, MindNode child) {
+    private record ConnectionView(Shape hoverGlow, Shape selectionGlow, Shape visual, Shape hitArea,
+                                  Circle startHandle, Circle middleHandle, Circle endHandle,
+                                  MindNode parent, MindNode child) {
     }
 
     public MindMapCanvas(MindMapController controller) {
@@ -137,7 +139,7 @@ public class MindMapCanvas extends ScrollPane {
                     contentGroup.getChildren().remove(selectionBox);
                 }
                 if (areaSelectionMoved && selectionBox != null) {
-                    controller.selectNodesInArea(selectionBox.getX(), selectionBox.getY(),
+                    controller.selectItemsInArea(selectionBox.getX(), selectionBox.getY(),
                             selectionBox.getX() + selectionBox.getWidth(),
                             selectionBox.getY() + selectionBox.getHeight());
                 } else {
@@ -223,17 +225,27 @@ public class MindMapCanvas extends ScrollPane {
             if (parent == null || !map.visibleNodes().contains(parent)) {
                 continue;
             }
+            boolean selected = selectedConnectionIds.contains(node.getId());
+            Shape hoverGlow = createConnectionShape(node.getConnectionStyle().getShape());
+            Shape selectionGlow = createConnectionShape(node.getConnectionStyle().getShape());
             Shape visual = createConnectionShape(node.getConnectionStyle().getShape());
             Shape hitArea = createConnectionShape(node.getConnectionStyle().getShape());
-            boolean selected = selectedConnectionIds.contains(node.getId());
-            styleConnection(visual, node.getConnectionStyle(), selected);
+            Circle startHandle = createConnectionHandle();
+            Circle middleHandle = createConnectionHandle();
+            Circle endHandle = createConnectionHandle();
+            styleConnectionGlow(hoverGlow, false, node.getConnectionStyle());
+            styleConnectionGlow(selectionGlow, true, node.getConnectionStyle());
+            styleConnection(visual, node.getConnectionStyle());
             styleConnectionHitArea(hitArea);
-            updateConnectionShape(visual, parent, node);
-            updateConnectionShape(hitArea, parent, node);
+            ConnectionView view = new ConnectionView(hoverGlow, selectionGlow, visual, hitArea,
+                    startHandle, middleHandle, endHandle, parent, node);
+            updateConnectionView(view);
+            setConnectionSelected(view, selected);
             installConnectionHandlers(visual, node);
             installConnectionHandlers(hitArea, node);
-            contentGroup.getChildren().addAll(visual, hitArea);
-            connectionViews.put(connectionKey(parent, node), new ConnectionView(visual, hitArea, parent, node));
+            contentGroup.getChildren().addAll(selectionGlow, hoverGlow, visual,
+                    startHandle, middleHandle, endHandle, hitArea);
+            connectionViews.put(connectionKey(parent, node), view);
         }
     }
 
@@ -241,10 +253,10 @@ public class MindMapCanvas extends ScrollPane {
         return shape == ConnectionShape.ELBOW ? new Path() : new CubicCurve();
     }
 
-    private void styleConnection(Shape shape, ConnectionStyle style, boolean selected) {
+    private void styleConnection(Shape shape, ConnectionStyle style) {
         shape.getStyleClass().add("connector");
-        Color strokeColor = selected ? Color.web("#2563EB") : style.getColor();
-        double strokeWidth = selected ? Math.max(style.getWidth() + 1.4, 3.2) : style.getWidth();
+        Color strokeColor = style.getColor();
+        double strokeWidth = style.getWidth();
         shape.setStyle("-fx-stroke: " + NodeStyle.toHex(strokeColor) + ";"
                 + "-fx-stroke-width: " + strokeWidth + ";"
                 + "-fx-fill: transparent;");
@@ -258,6 +270,25 @@ public class MindMapCanvas extends ScrollPane {
         }
     }
 
+    private void styleConnectionGlow(Shape shape, boolean selected, ConnectionStyle style) {
+        shape.setMouseTransparent(true);
+        shape.setFill(Color.TRANSPARENT);
+        shape.setStroke(selected ? Color.rgb(37, 99, 235, 0.30) : Color.rgb(96, 165, 250, 0.24));
+        shape.setStrokeWidth(selected ? Math.max(style.getWidth() + 8.0, 10.0) : Math.max(style.getWidth() + 5.0, 7.0));
+        shape.setStrokeLineCap(StrokeLineCap.ROUND);
+        shape.setVisible(false);
+    }
+
+    private Circle createConnectionHandle() {
+        Circle circle = new Circle(4.5);
+        circle.setMouseTransparent(true);
+        circle.setFill(Color.WHITE);
+        circle.setStroke(Color.web("#2563EB"));
+        circle.setStrokeWidth(1.8);
+        circle.setVisible(false);
+        return circle;
+    }
+
     private void styleConnectionHitArea(Shape shape) {
         shape.setFill(Color.TRANSPARENT);
         shape.setStroke(Color.TRANSPARENT);
@@ -267,6 +298,8 @@ public class MindMapCanvas extends ScrollPane {
     }
 
     private void installConnectionHandlers(Shape shape, MindNode child) {
+        shape.setOnMouseEntered(event -> setConnectionHover(child, true));
+        shape.setOnMouseExited(event -> setConnectionHover(child, false));
         shape.setOnMouseClicked(event -> {
             if (event.getButton() == MouseButton.PRIMARY) {
                 controller.selectConnection(child.getId(), event.isControlDown());
@@ -278,6 +311,33 @@ public class MindMapCanvas extends ScrollPane {
             connectionContextMenu(child).show(shape, event.getScreenX(), event.getScreenY());
             event.consume();
         });
+    }
+
+    private void setConnectionHover(MindNode child, boolean hovered) {
+        MindNode parent = child.getParent();
+        if (parent == null) {
+            return;
+        }
+        ConnectionView view = connectionViews.get(connectionKey(parent, child));
+        if (view != null && !selectedConnectionIds.contains(child.getId())) {
+            view.hoverGlow().setVisible(hovered);
+        }
+    }
+
+    private void setConnectionSelected(ConnectionView view, boolean selected) {
+        view.selectionGlow().setVisible(selected);
+        view.hoverGlow().setVisible(false);
+        view.startHandle().setVisible(selected);
+        view.middleHandle().setVisible(selected);
+        view.endHandle().setVisible(selected);
+    }
+
+    private void updateConnectionView(ConnectionView view) {
+        updateConnectionShape(view.selectionGlow(), view.parent(), view.child());
+        updateConnectionShape(view.hoverGlow(), view.parent(), view.child());
+        updateConnectionShape(view.visual(), view.parent(), view.child());
+        updateConnectionShape(view.hitArea(), view.parent(), view.child());
+        updateConnectionHandles(view);
     }
 
     private void updateConnectionShape(Shape shape, MindNode parent, MindNode node) {
@@ -316,6 +376,53 @@ public class MindMapCanvas extends ScrollPane {
                 new LineTo(midX, endY),
                 new LineTo(endX, endY)
         );
+    }
+
+    private void updateConnectionHandles(ConnectionView view) {
+        Point2D start = connectionStart(view.parent());
+        Point2D middle = connectionMiddle(view.parent(), view.child(), view.child().getConnectionStyle().getShape());
+        Point2D end = connectionEnd(view.child());
+        placeConnectionHandle(view.startHandle(), start);
+        placeConnectionHandle(view.middleHandle(), middle);
+        placeConnectionHandle(view.endHandle(), end);
+    }
+
+    private Point2D connectionStart(MindNode parent) {
+        return new Point2D(parent.getCenterX(), parent.getCenterY());
+    }
+
+    private Point2D connectionEnd(MindNode child) {
+        return new Point2D(child.getCenterX(), child.getCenterY());
+    }
+
+    private Point2D connectionMiddle(MindNode parent, MindNode child, ConnectionShape shape) {
+        double startX = parent.getCenterX();
+        double startY = parent.getCenterY();
+        double endX = child.getCenterX();
+        double endY = child.getCenterY();
+        if (shape == ConnectionShape.ELBOW) {
+            return new Point2D((startX + endX) / 2.0, (startY + endY) / 2.0);
+        }
+        double controlOffset = Math.max(80, Math.abs(endX - startX) * 0.5);
+        double controlX1 = startX + (endX > startX ? controlOffset : -controlOffset);
+        double controlY1 = startY;
+        double controlX2 = endX + (endX > startX ? -controlOffset : controlOffset);
+        double controlY2 = endY;
+        double t = 0.5;
+        double x = Math.pow(1 - t, 3) * startX
+                + 3 * Math.pow(1 - t, 2) * t * controlX1
+                + 3 * (1 - t) * Math.pow(t, 2) * controlX2
+                + Math.pow(t, 3) * endX;
+        double y = Math.pow(1 - t, 3) * startY
+                + 3 * Math.pow(1 - t, 2) * t * controlY1
+                + 3 * (1 - t) * Math.pow(t, 2) * controlY2
+                + Math.pow(t, 3) * endY;
+        return new Point2D(x, y);
+    }
+
+    private void placeConnectionHandle(Circle handle, Point2D point) {
+        handle.setCenterX(point.getX());
+        handle.setCenterY(point.getY());
     }
 
     private String connectionKey(MindNode parent, MindNode node) {
@@ -566,8 +673,7 @@ public class MindMapCanvas extends ScrollPane {
             }
             ConnectionView view = connectionViews.get(connectionKey(parent, node));
             if (view != null) {
-                updateConnectionShape(view.visual(), parent, node);
-                updateConnectionShape(view.hitArea(), parent, node);
+                updateConnectionView(view);
             }
         }
     }

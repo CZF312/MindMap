@@ -24,6 +24,7 @@ import com.example.mindmap.view.MainFrame;
 import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
+import javafx.geometry.Point2D;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
@@ -693,6 +694,11 @@ public class MindMapController {
         refreshAll("缩放比例：100%", false);
     }
 
+    public void changeZoom(double zoom) {
+        currentMap.setZoom(zoom);
+        refreshAll("缩放比例：" + Math.round(currentMap.getZoom() * 100) + "%", false);
+    }
+
     public void fitToWindow() {
         double zoomX = mainFrame.getCanvas().getViewportBounds().getWidth() / Math.max(1, preferredCanvasWidth());
         double zoomY = mainFrame.getCanvas().getViewportBounds().getHeight() / Math.max(1, preferredCanvasHeight());
@@ -754,12 +760,30 @@ public class MindMapController {
         refreshAll("已取消选择", false);
     }
 
-    public void selectNodesInArea(double minX, double minY, double maxX, double maxY) {
+    public void selectAllItems() {
+        List<MindNode> nodes = currentMap.allNodes();
+        List<String> connectionIds = nodes.stream()
+                .filter(node -> node.getParent() != null)
+                .map(MindNode::getId)
+                .toList();
+        selectionModel.selectAll(nodes, connectionIds);
+        refreshAll("已全选 " + nodes.size() + " 个节点、" + connectionIds.size() + " 条连线", false);
+    }
+
+    public void selectItemsInArea(double minX, double minY, double maxX, double maxY) {
         List<MindNode> nodes = currentMap.visibleNodes().stream()
                 .filter(node -> intersects(node, minX, minY, maxX, maxY))
                 .toList();
-        selectionModel.selectAll(nodes);
-        refreshAll(nodes.isEmpty() ? "框选范围内没有节点" : "已框选 " + nodes.size() + " 个节点", false);
+        Set<String> visibleIds = currentMap.visibleNodes().stream()
+                .map(MindNode::getId)
+                .collect(java.util.stream.Collectors.toSet());
+        List<String> connectionIds = currentMap.visibleNodes().stream()
+                .filter(node -> node.getParent() != null && visibleIds.contains(node.getParent().getId()))
+                .filter(node -> intersectsConnection(node, minX, minY, maxX, maxY))
+                .map(MindNode::getId)
+                .toList();
+        selectionModel.selectAll(nodes, connectionIds);
+        refreshAll(selectionAreaStatus(nodes.size(), connectionIds.size()), false);
     }
 
     public boolean isSelected(MindNode node) {
@@ -831,7 +855,10 @@ public class MindMapController {
             if (scene.getFocusOwner() instanceof TextInputControl) {
                 return;
             }
-            if (event.getCode() == KeyCode.TAB) {
+            if (event.isControlDown() && event.getCode() == KeyCode.A) {
+                selectAllItems();
+                event.consume();
+            } else if (event.getCode() == KeyCode.TAB) {
                 addChildNode();
                 event.consume();
             } else if (event.getCode() == KeyCode.ENTER) {
@@ -868,6 +895,7 @@ public class MindMapController {
                 !undoStack.isEmpty(),
                 !redoStack.isEmpty(),
                 currentMap.getLayoutType());
+        updateToolbarNodeStyle();
         mainFrame.getToolbarPanel().updateCanvasColor(currentMap.getCanvasColor());
         ConnectionStyle connectionStyle = activeConnectionStyle();
         mainFrame.getToolbarPanel().updateConnectionStyle(connectionStyle.getColor(),
@@ -875,6 +903,7 @@ public class MindMapController {
         refreshRecentFiles();
         mainFrame.setStatus(status);
         mainFrame.setZoom(currentMap.getZoom());
+        mainFrame.setDocumentStats(countWords(), currentMap.allNodes().size());
         updateTitle();
     }
 
@@ -889,6 +918,29 @@ public class MindMapController {
 
     private void notice(String message) {
         mainFrame.setStatus(message);
+    }
+
+    private void updateToolbarNodeStyle() {
+        MindNode node = primaryNode();
+        if (node == null) {
+            mainFrame.getToolbarPanel().updateNodeStyle(Color.WHITE, Color.web("#CBD5E1"), Color.web("#0F172A"));
+            mainFrame.getToolbarPanel().updateTextStyle(false, false, false, false);
+            return;
+        }
+        com.example.mindmap.model.NodeStyle style = node.getStyle();
+        mainFrame.getToolbarPanel().updateNodeStyle(style.getFillColor(), style.getBorderColor(), style.getTextColor());
+        mainFrame.getToolbarPanel().updateTextStyle(style.isBold(), style.isItalic(),
+                style.isUnderline(), style.isStrikethrough());
+    }
+
+    private int countWords() {
+        return currentMap.allNodes().stream()
+                .map(MindNode::getText)
+                .filter(java.util.Objects::nonNull)
+                .mapToInt(text -> (int) text.codePoints()
+                        .filter(codePoint -> !Character.isWhitespace(codePoint))
+                        .count())
+                .sum();
     }
 
     private boolean confirmBeforeDestructiveAction() {
@@ -956,6 +1008,120 @@ public class MindMapController {
                 && node.getX() + node.getWidth() >= minX
                 && node.getY() <= maxY
                 && node.getY() + node.getHeight() >= minY;
+    }
+
+    private boolean intersectsConnection(MindNode child, double minX, double minY, double maxX, double maxY) {
+        MindNode parent = child.getParent();
+        if (parent == null) {
+            return false;
+        }
+        Point2D parentCenter = new Point2D(parent.getCenterX(), parent.getCenterY());
+        Point2D childCenter = new Point2D(child.getCenterX(), child.getCenterY());
+        Point2D start = connectionBoundaryPoint(parent, childCenter);
+        Point2D end = connectionBoundaryPoint(child, parentCenter);
+        if (child.getConnectionStyle().getShape() == ConnectionShape.ELBOW) {
+            double midX = (start.getX() + end.getX()) / 2.0;
+            Point2D cornerA = new Point2D(midX, start.getY());
+            Point2D cornerB = new Point2D(midX, end.getY());
+            return segmentIntersectsRect(start, cornerA, minX, minY, maxX, maxY)
+                    || segmentIntersectsRect(cornerA, cornerB, minX, minY, maxX, maxY)
+                    || segmentIntersectsRect(cornerB, end, minX, minY, maxX, maxY);
+        }
+        Point2D previous = start;
+        for (int i = 1; i <= 24; i++) {
+            double t = i / 24.0;
+            Point2D current = curvePoint(start, end, t);
+            if (segmentIntersectsRect(previous, current, minX, minY, maxX, maxY)) {
+                return true;
+            }
+            previous = current;
+        }
+        return false;
+    }
+
+    private Point2D connectionBoundaryPoint(MindNode node, Point2D toward) {
+        double centerX = node.getCenterX();
+        double centerY = node.getCenterY();
+        double dx = toward.getX() - centerX;
+        double dy = toward.getY() - centerY;
+        if (Math.abs(dx) < 0.000001 && Math.abs(dy) < 0.000001) {
+            return new Point2D(centerX, centerY);
+        }
+        double scaleX = Math.abs(dx) < 0.000001 ? Double.POSITIVE_INFINITY : (node.getWidth() / 2.0) / Math.abs(dx);
+        double scaleY = Math.abs(dy) < 0.000001 ? Double.POSITIVE_INFINITY : (node.getHeight() / 2.0) / Math.abs(dy);
+        double scale = Math.min(scaleX, scaleY);
+        return new Point2D(centerX + dx * scale, centerY + dy * scale);
+    }
+
+    private Point2D curvePoint(Point2D start, Point2D end, double t) {
+        double controlOffset = Math.max(80, Math.abs(end.getX() - start.getX()) * 0.5);
+        double controlX1 = start.getX() + (end.getX() > start.getX() ? controlOffset : -controlOffset);
+        double controlY1 = start.getY();
+        double controlX2 = end.getX() + (end.getX() > start.getX() ? -controlOffset : controlOffset);
+        double controlY2 = end.getY();
+        double inverse = 1 - t;
+        double x = Math.pow(inverse, 3) * start.getX()
+                + 3 * Math.pow(inverse, 2) * t * controlX1
+                + 3 * inverse * Math.pow(t, 2) * controlX2
+                + Math.pow(t, 3) * end.getX();
+        double y = Math.pow(inverse, 3) * start.getY()
+                + 3 * Math.pow(inverse, 2) * t * controlY1
+                + 3 * inverse * Math.pow(t, 2) * controlY2
+                + Math.pow(t, 3) * end.getY();
+        return new Point2D(x, y);
+    }
+
+    private boolean segmentIntersectsRect(Point2D a, Point2D b, double minX, double minY, double maxX, double maxY) {
+        return pointInRect(a, minX, minY, maxX, maxY)
+                || pointInRect(b, minX, minY, maxX, maxY)
+                || segmentsIntersect(a, b, new Point2D(minX, minY), new Point2D(maxX, minY))
+                || segmentsIntersect(a, b, new Point2D(maxX, minY), new Point2D(maxX, maxY))
+                || segmentsIntersect(a, b, new Point2D(maxX, maxY), new Point2D(minX, maxY))
+                || segmentsIntersect(a, b, new Point2D(minX, maxY), new Point2D(minX, minY));
+    }
+
+    private boolean pointInRect(Point2D point, double minX, double minY, double maxX, double maxY) {
+        return point.getX() >= minX && point.getX() <= maxX
+                && point.getY() >= minY && point.getY() <= maxY;
+    }
+
+    private boolean segmentsIntersect(Point2D a, Point2D b, Point2D c, Point2D d) {
+        double epsilon = 0.000001;
+        double d1 = direction(c, d, a);
+        double d2 = direction(c, d, b);
+        double d3 = direction(a, b, c);
+        double d4 = direction(a, b, d);
+        if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0))
+                && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+            return true;
+        }
+        return Math.abs(d1) < epsilon && onSegment(c, d, a)
+                || Math.abs(d2) < epsilon && onSegment(c, d, b)
+                || Math.abs(d3) < epsilon && onSegment(a, b, c)
+                || Math.abs(d4) < epsilon && onSegment(a, b, d);
+    }
+
+    private double direction(Point2D a, Point2D b, Point2D c) {
+        return (c.getX() - a.getX()) * (b.getY() - a.getY())
+                - (b.getX() - a.getX()) * (c.getY() - a.getY());
+    }
+
+    private boolean onSegment(Point2D a, Point2D b, Point2D c) {
+        return Math.min(a.getX(), b.getX()) <= c.getX() && c.getX() <= Math.max(a.getX(), b.getX())
+                && Math.min(a.getY(), b.getY()) <= c.getY() && c.getY() <= Math.max(a.getY(), b.getY());
+    }
+
+    private String selectionAreaStatus(int nodeCount, int connectionCount) {
+        if (nodeCount == 0 && connectionCount == 0) {
+            return "框选范围内没有对象";
+        }
+        if (nodeCount == 0) {
+            return "已框选 " + connectionCount + " 条连线";
+        }
+        if (connectionCount == 0) {
+            return "已框选 " + nodeCount + " 个节点";
+        }
+        return "已框选 " + nodeCount + " 个节点、" + connectionCount + " 条连线";
     }
 
     private String replaceFirstIgnoreCase(String text, String target, String replacement) {
