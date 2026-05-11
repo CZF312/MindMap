@@ -12,6 +12,7 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
+import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.OutputKeys;
@@ -27,6 +28,13 @@ public class MindMapFileService {
     public MindMap load(Path path) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+        factory.setXIncludeAware(false);
+        factory.setExpandEntityReferences(false);
         DocumentBuilder builder = factory.newDocumentBuilder();
         Document document = builder.parse(path.toFile());
         Element rootElement = document.getDocumentElement();
@@ -43,11 +51,11 @@ public class MindMapFileService {
         map.setConnectionWidth(parseDouble(rootElement.getAttribute("connectionWidth"), 2.2));
         map.setConnectionDashed(Boolean.parseBoolean(rootElement.getAttribute("connectionDashed")));
         map.setConnectionShape(parseConnectionShape(rootElement.getAttribute("connectionShape")));
-        NodeList roots = rootElement.getElementsByTagName("node");
-        if (roots.getLength() == 0) {
+        Element rootNode = firstDirectNode(rootElement);
+        if (rootNode == null) {
             throw new IOException("文件中没有中心节点");
         }
-        map.setRoot(readNode((Element) roots.item(0), map.defaultConnectionStyle()));
+        map.setRoot(readNode(rootNode, map.defaultConnectionStyle()));
         map.setFilePath(path);
         map.setModified(false);
         map.bumpNextIdFromExistingNodes();
@@ -155,6 +163,16 @@ public class MindMapFileService {
             }
         }
         return node;
+    }
+
+    private Element firstDirectNode(Element rootElement) {
+        NodeList children = rootElement.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            if (children.item(i) instanceof Element child && "node".equals(child.getTagName())) {
+                return child;
+            }
+        }
+        return null;
     }
 
     private LayoutType parseLayout(String value) {

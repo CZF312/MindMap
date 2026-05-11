@@ -21,14 +21,14 @@ abstract class MindMapSnapshotCommand implements Command {
             target.setModified(true);
             after = target.deepCopy();
         } else {
-            target.copyFrom(after);
+            target.copyEditableContentFrom(after);
             target.setModified(true);
         }
     }
 
     @Override
     public void undo() {
-        target.copyFrom(before);
+        target.copyEditableContentFrom(before);
         target.setModified(true);
     }
 }

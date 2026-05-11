@@ -107,7 +107,7 @@
 }
 
 .tool-row {
-    -fx-alignment: center-left;
+    -fx-alignment: center;
     -fx-background-color: #ffffff;
 }
 
@@ -118,7 +118,7 @@
 }
 
 .ribbon-group-row {
-    -fx-alignment: center-left;
+    -fx-alignment: center;
 }
 
 .ribbon-group-title {

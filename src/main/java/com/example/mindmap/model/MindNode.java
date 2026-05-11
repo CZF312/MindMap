@@ -142,12 +142,18 @@ public class MindNode {
     }
 
     public void moveBy(double dx, double dy) {
+        moveBy(dx, dy, true);
+    }
+
+    private void moveBy(double dx, double dy, boolean recordOffset) {
         x += dx;
         y += dy;
-        offsetX += dx;
-        offsetY += dy;
+        if (recordOffset) {
+            offsetX += dx;
+            offsetY += dy;
+        }
         for (MindNode child : children) {
-            child.moveBy(dx, dy);
+            child.moveBy(dx, dy, false);
         }
     }
 

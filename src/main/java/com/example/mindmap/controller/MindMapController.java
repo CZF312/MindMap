@@ -19,12 +19,14 @@ import com.example.mindmap.service.MindMapFileService;
 import com.example.mindmap.service.MindMapLayoutService;
 import com.example.mindmap.service.RecentFileService;
 import com.example.mindmap.service.SearchService;
+import com.example.mindmap.service.EditHistory;
+import com.example.mindmap.service.SearchState;
 import com.example.mindmap.util.Dialogs;
+import com.example.mindmap.util.GeometryUtils;
 import com.example.mindmap.view.MainFrame;
 import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
-import javafx.geometry.Point2D;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
@@ -46,7 +48,6 @@ import javafx.stage.Stage;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -63,12 +64,10 @@ public class MindMapController {
     private final SearchService searchService = new SearchService();
     private final RecentFileService recentFileService = new RecentFileService();
     private final SelectionModel selectionModel = new SelectionModel();
-    private final ArrayDeque<Command> undoStack = new ArrayDeque<>();
-    private final ArrayDeque<Command> redoStack = new ArrayDeque<>();
-    private final List<String> searchResultIds = new ArrayList<>();
+    private final EditHistory editHistory = new EditHistory();
+    private final SearchState searchState = new SearchState();
     private MindMap currentMap = new MindMap();
     private MindMap dragBefore;
-    private int searchIndex = -1;
 
     private enum ExportFormat {
         PNG, JPG, PDF
@@ -91,8 +90,8 @@ public class MindMapController {
     public void newMapSilently() {
         currentMap = new MindMap();
         selectionModel.selectOnly(currentMap.getRoot());
-        undoStack.clear();
-        redoStack.clear();
+        editHistory.clear();
+        searchState.setResults(List.of());
         refreshAll("已新建思维导图", true);
     }
 
@@ -132,8 +131,8 @@ public class MindMapController {
             MindMap loaded = fileService.load(path);
             currentMap = loaded;
             selectionModel.selectOnly(currentMap.getRoot());
-            undoStack.clear();
-            redoStack.clear();
+            editHistory.clear();
+            searchState.setResults(List.of());
             recentFileService.add(path);
             refreshAll((recent ? "已打开最近文件：" : "打开成功：") + path, true);
         } catch (Exception ex) {
@@ -343,15 +342,16 @@ public class MindMapController {
                 .ifPresent(text -> renameNodeText(node.getId(), text));
     }
 
-    public void renameNodeText(String nodeId, String text) {
+    public boolean renameNodeText(String nodeId, String text) {
         if (text == null || text.isBlank()) {
-            notice("节点文本不能为空");
-            return;
+            refreshAll("节点文本不能为空", false);
+            return false;
         }
         executeAndRefresh(new RenameNodeCommand(currentMap, () -> {
             find(nodeId).ifPresent(live -> live.setText(text));
             selectionModel.setPrimaryNodeId(nodeId);
         }), "已重命名节点", true);
+        return true;
     }
 
     public void changeFillColor(Color color) {
@@ -460,7 +460,10 @@ public class MindMapController {
     }
 
     public void toggleConnectionDashed() {
-        boolean dashed = !activeConnectionStyle().isDashed();
+        changeConnectionDashed(!activeConnectionStyle().isDashed());
+    }
+
+    public void changeConnectionDashed(boolean dashed) {
         updateConnectionStyle(style -> style.setDashed(dashed),
                 () -> currentMap.setConnectionDashed(dashed),
                 dashed ? "已切换为虚线" : "已切换为实线");
@@ -581,34 +584,26 @@ public class MindMapController {
     }
 
     public void undo() {
-        if (undoStack.isEmpty()) {
+        if (!editHistory.undo()) {
             notice("没有可撤销操作");
             return;
         }
-        Command command = undoStack.pop();
-        command.undo();
-        redoStack.push(command);
         refreshAll("已撤销", true);
     }
 
     public void redo() {
-        if (redoStack.isEmpty()) {
+        if (!editHistory.redo()) {
             notice("没有可重做操作");
             return;
         }
-        Command command = redoStack.pop();
-        command.execute();
-        undoStack.push(command);
         refreshAll("已重做", true);
     }
 
     public void search(String keyword) {
-        searchResultIds.clear();
-        searchResultIds.addAll(searchService.search(currentMap, keyword).stream().map(MindNode::getId).toList());
-        searchIndex = searchResultIds.isEmpty() ? -1 : 0;
-        refreshAll(searchResultIds.isEmpty()
+        searchState.setResults(searchService.search(currentMap, keyword).stream().map(MindNode::getId).toList());
+        refreshAll(searchState.isEmpty()
                 ? (keyword == null || keyword.isBlank() ? "已清空搜索" : "未找到匹配节点")
-                : "搜索到 " + searchResultIds.size() + " 个匹配节点", false);
+                : "搜索到 " + searchState.size() + " 个匹配节点", false);
     }
 
     public void nextSearchResult() {
@@ -658,16 +653,16 @@ public class MindMapController {
             notice("请输入查找内容");
             return;
         }
-        if (searchResultIds.isEmpty()) {
+        if (searchState.isEmpty()) {
             search(target);
         }
-        if (searchResultIds.isEmpty() || searchIndex < 0) {
+        if (searchState.isEmpty()) {
             notice("没有可替换的搜索结果");
             return;
         }
-        String id = searchResultIds.get(searchIndex);
+        String id = searchState.currentOrFirst();
         executeAndRefresh(new RenameNodeCommand(currentMap, () ->
-                find(id).ifPresent(node -> node.setText(replaceFirstIgnoreCase(node.getText(), target, replacement)))),
+                find(id).ifPresent(node -> node.setText(SearchState.replaceFirstIgnoreCase(node.getText(), target, replacement)))),
                 "已替换当前匹配项", true);
         search(target);
     }
@@ -685,22 +680,21 @@ public class MindMapController {
         }
         executeAndRefresh(new RenameNodeCommand(currentMap, () -> {
             for (String id : ids) {
-                find(id).ifPresent(node -> node.setText(replaceAllIgnoreCase(node.getText(), target, replacement)));
+                find(id).ifPresent(node -> node.setText(SearchState.replaceAllIgnoreCase(node.getText(), target, replacement)));
             }
         }), "已替换 " + ids.size() + " 个节点", true);
         search(target);
     }
 
     private void navigateSearch(int delta) {
-        if (searchResultIds.isEmpty()) {
+        if (searchState.isEmpty()) {
             notice("没有搜索结果");
             return;
         }
-        searchIndex = Math.floorMod(searchIndex + delta, searchResultIds.size());
-        String id = searchResultIds.get(searchIndex);
+        String id = searchState.navigate(delta);
         expandAncestorsIfNeeded(id);
         selectionModel.setPrimaryNodeId(id);
-        refreshAll("定位到搜索结果 " + (searchIndex + 1) + "/" + searchResultIds.size(), true);
+        refreshAll("定位到搜索结果 " + (searchState.currentIndex() + 1) + "/" + searchState.size(), true);
         Platform.runLater(() -> mainFrame.getCanvas().scrollToNode(id));
     }
 
@@ -797,14 +791,14 @@ public class MindMapController {
 
     public void selectItemsInArea(double minX, double minY, double maxX, double maxY) {
         List<MindNode> nodes = currentMap.visibleNodes().stream()
-                .filter(node -> intersects(node, minX, minY, maxX, maxY))
+                .filter(node -> GeometryUtils.intersectsNode(node, minX, minY, maxX, maxY))
                 .toList();
         Set<String> visibleIds = currentMap.visibleNodes().stream()
                 .map(MindNode::getId)
                 .collect(java.util.stream.Collectors.toSet());
         List<String> connectionIds = currentMap.visibleNodes().stream()
                 .filter(node -> node.getParent() != null && visibleIds.contains(node.getParent().getId()))
-                .filter(node -> intersectsConnection(node, minX, minY, maxX, maxY))
+                .filter(node -> GeometryUtils.intersectsConnection(node, minX, minY, maxX, maxY))
                 .map(MindNode::getId)
                 .toList();
         selectionModel.selectAll(nodes, connectionIds);
@@ -831,8 +825,11 @@ public class MindMapController {
             return;
         }
         MindMap after = currentMap.deepCopy();
-        undoStack.push(new MoveNodeCommand(currentMap, dragBefore, after));
-        redoStack.clear();
+        if (!GeometryUtils.geometryChanged(dragBefore, after)) {
+            dragBefore = null;
+            return;
+        }
+        editHistory.pushExecuted(new MoveNodeCommand(currentMap, dragBefore, after));
         currentMap.setModified(true);
         dragBefore = null;
         refreshAll("已移动节点", false);
@@ -840,8 +837,12 @@ public class MindMapController {
 
     public void resizeNode(String nodeId, double x, double y, double width, double height) {
         find(nodeId).ifPresent(node -> {
+            double oldX = node.getX();
+            double oldY = node.getY();
             node.setX(x);
             node.setY(y);
+            node.setOffsetX(node.getOffsetX() + node.getX() - oldX);
+            node.setOffsetY(node.getOffsetY() + node.getY() - oldY);
             node.setWidth(width);
             node.setHeight(height);
         });
@@ -894,9 +895,7 @@ public class MindMapController {
     }
 
     private void executeAndRefresh(Command command, String status, boolean relayout) {
-        command.execute();
-        undoStack.push(command);
-        redoStack.clear();
+        editHistory.execute(command);
         refreshAll(status, relayout);
     }
 
@@ -904,7 +903,7 @@ public class MindMapController {
         if (relayout) {
             layoutService.layout(currentMap);
         }
-        Set<String> searchIds = new HashSet<>(searchResultIds);
+        Set<String> searchIds = new HashSet<>(searchState.ids());
         selectionModel.getSelectedNodeIds().removeIf(id -> find(id).isEmpty());
         selectionModel.getSelectedConnectionIds().removeIf(id -> find(id).map(MindNode::getParent).isEmpty());
         if (selectionModel.getPrimaryNodeId() != null && find(selectionModel.getPrimaryNodeId()).isEmpty()) {
@@ -917,8 +916,8 @@ public class MindMapController {
                 primaryNode() != null && !primaryNode().isRoot(),
                 selectedNodes().stream().anyMatch(node -> !node.isRoot()),
                 primaryNode() != null && !primaryNode().getChildren().isEmpty(),
-                !undoStack.isEmpty(),
-                !redoStack.isEmpty(),
+                editHistory.canUndo(),
+                editHistory.canRedo(),
                 currentMap.getLayoutType());
         updateToolbarNodeStyle();
         mainFrame.getToolbarPanel().updateCanvasColor(currentMap.getCanvasColor());
@@ -949,12 +948,14 @@ public class MindMapController {
         MindNode node = primaryNode();
         if (node == null) {
             mainFrame.getToolbarPanel().updateNodeStyle(Color.WHITE, Color.web("#CBD5E1"), Color.web("#0F172A"));
-            mainFrame.getToolbarPanel().updateTextStyle(false, false, false, false);
+            mainFrame.getToolbarPanel().updateTextStyle("Microsoft YaHei UI", 13,
+                    false, false, false, false);
             return;
         }
         com.example.mindmap.model.NodeStyle style = node.getStyle();
         mainFrame.getToolbarPanel().updateNodeStyle(style.getFillColor(), style.getBorderColor(), style.getTextColor());
-        mainFrame.getToolbarPanel().updateTextStyle(style.isBold(), style.isItalic(),
+        mainFrame.getToolbarPanel().updateTextStyle(style.getFontFamily(), style.getFontSize(),
+                style.isBold(), style.isItalic(),
                 style.isUnderline(), style.isStrikethrough());
     }
 
@@ -1014,126 +1015,13 @@ public class MindMapController {
     private void expandAncestorsIfNeeded(String id) {
         find(id).ifPresent(node -> {
             MindNode parent = node.getParent();
-            boolean changed = false;
             while (parent != null) {
                 if (parent.isCollapsed()) {
                     parent.setCollapsed(false);
-                    changed = true;
                 }
                 parent = parent.getParent();
             }
-            if (changed) {
-                currentMap.setModified(true);
-            }
         });
-    }
-
-    private boolean intersects(MindNode node, double minX, double minY, double maxX, double maxY) {
-        return node.getX() <= maxX
-                && node.getX() + node.getWidth() >= minX
-                && node.getY() <= maxY
-                && node.getY() + node.getHeight() >= minY;
-    }
-
-    private boolean intersectsConnection(MindNode child, double minX, double minY, double maxX, double maxY) {
-        MindNode parent = child.getParent();
-        if (parent == null) {
-            return false;
-        }
-        Point2D parentCenter = new Point2D(parent.getCenterX(), parent.getCenterY());
-        Point2D childCenter = new Point2D(child.getCenterX(), child.getCenterY());
-        Point2D start = connectionBoundaryPoint(parent, childCenter);
-        Point2D end = connectionBoundaryPoint(child, parentCenter);
-        if (child.getConnectionStyle().getShape() == ConnectionShape.ELBOW) {
-            double midX = (start.getX() + end.getX()) / 2.0;
-            Point2D cornerA = new Point2D(midX, start.getY());
-            Point2D cornerB = new Point2D(midX, end.getY());
-            return segmentIntersectsRect(start, cornerA, minX, minY, maxX, maxY)
-                    || segmentIntersectsRect(cornerA, cornerB, minX, minY, maxX, maxY)
-                    || segmentIntersectsRect(cornerB, end, minX, minY, maxX, maxY);
-        }
-        Point2D previous = start;
-        for (int i = 1; i <= 24; i++) {
-            double t = i / 24.0;
-            Point2D current = curvePoint(start, end, t);
-            if (segmentIntersectsRect(previous, current, minX, minY, maxX, maxY)) {
-                return true;
-            }
-            previous = current;
-        }
-        return false;
-    }
-
-    private Point2D connectionBoundaryPoint(MindNode node, Point2D toward) {
-        double centerX = node.getCenterX();
-        double centerY = node.getCenterY();
-        double dx = toward.getX() - centerX;
-        double dy = toward.getY() - centerY;
-        if (Math.abs(dx) < 0.000001 && Math.abs(dy) < 0.000001) {
-            return new Point2D(centerX, centerY);
-        }
-        double scaleX = Math.abs(dx) < 0.000001 ? Double.POSITIVE_INFINITY : (node.getWidth() / 2.0) / Math.abs(dx);
-        double scaleY = Math.abs(dy) < 0.000001 ? Double.POSITIVE_INFINITY : (node.getHeight() / 2.0) / Math.abs(dy);
-        double scale = Math.min(scaleX, scaleY);
-        return new Point2D(centerX + dx * scale, centerY + dy * scale);
-    }
-
-    private Point2D curvePoint(Point2D start, Point2D end, double t) {
-        double controlOffset = Math.max(80, Math.abs(end.getX() - start.getX()) * 0.5);
-        double controlX1 = start.getX() + (end.getX() > start.getX() ? controlOffset : -controlOffset);
-        double controlY1 = start.getY();
-        double controlX2 = end.getX() + (end.getX() > start.getX() ? -controlOffset : controlOffset);
-        double controlY2 = end.getY();
-        double inverse = 1 - t;
-        double x = Math.pow(inverse, 3) * start.getX()
-                + 3 * Math.pow(inverse, 2) * t * controlX1
-                + 3 * inverse * Math.pow(t, 2) * controlX2
-                + Math.pow(t, 3) * end.getX();
-        double y = Math.pow(inverse, 3) * start.getY()
-                + 3 * Math.pow(inverse, 2) * t * controlY1
-                + 3 * inverse * Math.pow(t, 2) * controlY2
-                + Math.pow(t, 3) * end.getY();
-        return new Point2D(x, y);
-    }
-
-    private boolean segmentIntersectsRect(Point2D a, Point2D b, double minX, double minY, double maxX, double maxY) {
-        return pointInRect(a, minX, minY, maxX, maxY)
-                || pointInRect(b, minX, minY, maxX, maxY)
-                || segmentsIntersect(a, b, new Point2D(minX, minY), new Point2D(maxX, minY))
-                || segmentsIntersect(a, b, new Point2D(maxX, minY), new Point2D(maxX, maxY))
-                || segmentsIntersect(a, b, new Point2D(maxX, maxY), new Point2D(minX, maxY))
-                || segmentsIntersect(a, b, new Point2D(minX, maxY), new Point2D(minX, minY));
-    }
-
-    private boolean pointInRect(Point2D point, double minX, double minY, double maxX, double maxY) {
-        return point.getX() >= minX && point.getX() <= maxX
-                && point.getY() >= minY && point.getY() <= maxY;
-    }
-
-    private boolean segmentsIntersect(Point2D a, Point2D b, Point2D c, Point2D d) {
-        double epsilon = 0.000001;
-        double d1 = direction(c, d, a);
-        double d2 = direction(c, d, b);
-        double d3 = direction(a, b, c);
-        double d4 = direction(a, b, d);
-        if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0))
-                && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
-            return true;
-        }
-        return Math.abs(d1) < epsilon && onSegment(c, d, a)
-                || Math.abs(d2) < epsilon && onSegment(c, d, b)
-                || Math.abs(d3) < epsilon && onSegment(a, b, c)
-                || Math.abs(d4) < epsilon && onSegment(a, b, d);
-    }
-
-    private double direction(Point2D a, Point2D b, Point2D c) {
-        return (c.getX() - a.getX()) * (b.getY() - a.getY())
-                - (b.getX() - a.getX()) * (c.getY() - a.getY());
-    }
-
-    private boolean onSegment(Point2D a, Point2D b, Point2D c) {
-        return Math.min(a.getX(), b.getX()) <= c.getX() && c.getX() <= Math.max(a.getX(), b.getX())
-                && Math.min(a.getY(), b.getY()) <= c.getY() && c.getY() <= Math.max(a.getY(), b.getY());
     }
 
     private String selectionAreaStatus(int nodeCount, int connectionCount) {
@@ -1147,36 +1035,6 @@ public class MindMapController {
             return "已框选 " + nodeCount + " 个节点";
         }
         return "已框选 " + nodeCount + " 个节点、" + connectionCount + " 条连线";
-    }
-
-    private String replaceFirstIgnoreCase(String text, String target, String replacement) {
-        String source = text == null ? "" : text;
-        String normalizedSource = source.toLowerCase(java.util.Locale.ROOT);
-        String normalizedTarget = target.toLowerCase(java.util.Locale.ROOT);
-        int index = normalizedSource.indexOf(normalizedTarget);
-        if (index < 0) {
-            return source;
-        }
-        return source.substring(0, index) + safeReplacement(replacement) + source.substring(index + target.length());
-    }
-
-    private String replaceAllIgnoreCase(String text, String target, String replacement) {
-        String source = text == null ? "" : text;
-        String normalizedSource = source.toLowerCase(java.util.Locale.ROOT);
-        String normalizedTarget = target.toLowerCase(java.util.Locale.ROOT);
-        StringBuilder result = new StringBuilder();
-        int cursor = 0;
-        int index = normalizedSource.indexOf(normalizedTarget);
-        while (index >= 0) {
-            result.append(source, cursor, index).append(safeReplacement(replacement));
-            cursor = index + target.length();
-            index = normalizedSource.indexOf(normalizedTarget, cursor);
-        }
-        return result.append(source.substring(cursor)).toString();
-    }
-
-    private String safeReplacement(String replacement) {
-        return replacement == null ? "" : replacement;
     }
 
     private FileChooser mindMapChooser(String title) {

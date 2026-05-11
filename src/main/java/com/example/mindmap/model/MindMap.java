@@ -115,6 +115,19 @@ public class MindMap {
         nextId = other.nextId;
     }
 
+    public void copyEditableContentFrom(MindMap other) {
+        name = other.name;
+        root = other.root == null ? null : other.root.deepCopy();
+        layoutType = other.layoutType;
+        canvasColor = other.canvasColor;
+        canvasImageUri = other.canvasImageUri;
+        connectionColor = other.connectionColor;
+        connectionWidth = other.connectionWidth;
+        connectionDashed = other.connectionDashed;
+        connectionShape = other.connectionShape;
+        nextId = other.nextId;
+    }
+
     public void bumpNextIdFromExistingNodes() {
         long max = 0;
         for (MindNode node : allNodes()) {

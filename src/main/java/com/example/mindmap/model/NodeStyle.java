@@ -66,7 +66,19 @@ public class NodeStyle {
     }
 
     public void setFontFamily(String fontFamily) {
-        this.fontFamily = fontFamily == null || fontFamily.isBlank() ? "Microsoft YaHei UI" : fontFamily;
+        this.fontFamily = normalizeFontFamily(fontFamily);
+    }
+
+    public static String normalizeFontFamily(String fontFamily) {
+        if (fontFamily == null || fontFamily.isBlank()) {
+            return "Microsoft YaHei UI";
+        }
+        return switch (fontFamily.trim()) {
+            case "SimSun" -> "宋体";
+            case "SimHei" -> "黑体";
+            case "KaiTi" -> "楷体";
+            default -> fontFamily.trim();
+        };
     }
 
     public double getFontSize() {

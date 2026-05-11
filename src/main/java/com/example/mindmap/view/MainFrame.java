@@ -193,15 +193,6 @@ public class MainFrame extends BorderPane {
         controller.changeZoom(nextValue / 100.0);
     }
 
-    private Button statusButton(String text, String tooltip, Runnable action) {
-        Button button = new Button(text);
-        button.getStyleClass().add("status-zoom-button");
-        button.setFocusTraversable(false);
-        button.setTooltip(new Tooltip(tooltip));
-        button.setOnAction(event -> action.run());
-        return button;
-    }
-
     public ToolbarPanel getToolbarPanel() {
         return toolbarPanel;
     }

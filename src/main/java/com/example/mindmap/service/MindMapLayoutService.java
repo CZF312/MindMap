@@ -3,6 +3,10 @@ package com.example.mindmap.service;
 import com.example.mindmap.model.LayoutType;
 import com.example.mindmap.model.MindMap;
 import com.example.mindmap.model.MindNode;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontPosture;
+import javafx.scene.text.FontWeight;
+import javafx.scene.text.Text;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,8 +37,17 @@ public class MindMapLayoutService {
         } else {
             List<MindNode> left = new ArrayList<>();
             List<MindNode> right = new ArrayList<>();
-            for (int i = 0; i < root.getChildren().size(); i++) {
-                (i % 2 == 0 ? right : left).add(root.getChildren().get(i));
+            double leftHeight = 0;
+            double rightHeight = 0;
+            for (MindNode child : root.getChildren()) {
+                double childHeight = subtreeHeight(child);
+                if (rightHeight <= leftHeight) {
+                    right.add(child);
+                    rightHeight += childHeight + V_GAP;
+                } else {
+                    left.add(child);
+                    leftHeight += childHeight + V_GAP;
+                }
             }
             layoutSide(right, 1, root.getX() + root.getWidth() + H_GAP, ROOT_Y, true);
             layoutSide(left, -1, root.getX() - H_GAP, ROOT_Y, true);
@@ -44,10 +57,24 @@ public class MindMapLayoutService {
 
     private void measureNode(MindNode node) {
         String text = node.getText() == null ? "" : node.getText();
-        int visualLength = text.codePointCount(0, text.length());
-        double width = Math.min(230, Math.max(node.isRoot() ? 150 : 126, 46 + visualLength * 9.2));
-        int lines = Math.max(1, (int) Math.ceil((visualLength * 9.2) / Math.max(80, width - 34)));
-        node.setMeasuredSize(width, Math.max(node.isRoot() ? 58 : 48, 30 + lines * 20));
+        double minWidth = node.isRoot() ? 150 : 126;
+        double maxWidth = 230;
+        Text singleLine = measuredText(node, text);
+        double naturalWidth = singleLine.getLayoutBounds().getWidth() + 46;
+        double width = Math.min(maxWidth, Math.max(minWidth, naturalWidth));
+        Text wrapped = measuredText(node, text);
+        wrapped.setWrappingWidth(Math.max(80, width - 34));
+        double height = Math.max(node.isRoot() ? 58 : 48, wrapped.getLayoutBounds().getHeight() + 26);
+        node.setMeasuredSize(width, height);
+    }
+
+    private Text measuredText(MindNode node, String text) {
+        Text measured = new Text(text);
+        measured.setFont(Font.font(node.getStyle().getFontFamily(),
+                node.getStyle().isBold() ? FontWeight.BOLD : FontWeight.NORMAL,
+                node.getStyle().isItalic() ? FontPosture.ITALIC : FontPosture.REGULAR,
+                node.getStyle().getFontSize()));
+        return measured;
     }
 
     private void layoutSide(List<MindNode> nodes, int direction, double anchorX, double centerY, boolean firstLevel) {

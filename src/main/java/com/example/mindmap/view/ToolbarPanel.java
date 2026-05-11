@@ -3,6 +3,7 @@ package com.example.mindmap.view;
 import com.example.mindmap.controller.MindMapController;
 import com.example.mindmap.model.ConnectionShape;
 import com.example.mindmap.model.LayoutType;
+import com.example.mindmap.model.NodeStyle;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -30,6 +31,7 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontPosture;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
+import javafx.scene.transform.Shear;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -58,9 +60,8 @@ public class ToolbarPanel extends VBox {
     private final ToggleButton italicButton = textStyleButton(TextStyleIcon.ITALIC, "斜体");
     private final ToggleButton underlineButton = textStyleButton(TextStyleIcon.UNDERLINE, "下划线");
     private final ToggleButton strikethroughButton = textStyleButton(TextStyleIcon.STRIKETHROUGH, "删除线");
-    private final ToggleButton connectionDashedButton = new ToggleButton("虚线");
-    private final ToggleButton curveConnectionButton = layoutButton("曲线");
-    private final ToggleButton elbowConnectionButton = layoutButton("折线");
+    private final ComboBox<String> connectionLineStyleBox = new ComboBox<>();
+    private final ComboBox<String> connectionShapeBox = new ComboBox<>();
     private final ToggleButton autoLayout = layoutButton("自动");
     private final ToggleButton leftLayout = layoutButton("左侧");
     private final ToggleButton rightLayout = layoutButton("右侧");
@@ -148,16 +149,24 @@ public class ToolbarPanel extends VBox {
                 controller.changeConnectionColor(connectionPicker.getValue());
             }
         });
-        fontBox.getItems().addAll("Microsoft YaHei UI", "SimSun", "SimHei", "KaiTi", "Arial");
+        fontBox.getItems().addAll("Microsoft YaHei UI", "宋体", "黑体", "楷体", "Arial");
         fontBox.setValue("Microsoft YaHei UI");
         fontBox.setTooltip(new javafx.scene.control.Tooltip("字体"));
         fontBox.setMinWidth(150);
-        fontBox.setOnAction(event -> controller.changeFontFamily(fontBox.getValue()));
-        fontSizeBox.getItems().addAll(12, 14, 16, 18, 20, 24, 28, 30, 36, 48);
+        fontBox.setOnAction(event -> {
+            if (!updatingControls && fontBox.getValue() != null) {
+                controller.changeFontFamily(fontBox.getValue());
+            }
+        });
+        fontSizeBox.getItems().addAll(12, 13, 14, 16, 18, 20, 24, 28, 30, 36, 48);
         fontSizeBox.setValue(13);
         fontSizeBox.setTooltip(new javafx.scene.control.Tooltip("字号"));
         fontSizeBox.setMinWidth(82);
-        fontSizeBox.setOnAction(event -> controller.changeFontSize(fontSizeBox.getValue()));
+        fontSizeBox.setOnAction(event -> {
+            if (!updatingControls && fontSizeBox.getValue() != null) {
+                controller.changeFontSize(fontSizeBox.getValue());
+            }
+        });
         boldButton.setOnAction(event -> {
             if (!updatingControls) {
                 controller.toggleBold();
@@ -187,27 +196,24 @@ public class ToolbarPanel extends VBox {
                 controller.changeConnectionWidth(connectionWidthBox.getValue());
             }
         });
-        connectionDashedButton.getStyleClass().add("tool-button");
-        connectionDashedButton.setTooltip(new javafx.scene.control.Tooltip("实线 / 虚线"));
-        connectionDashedButton.setMinWidth(Region.USE_PREF_SIZE);
-        connectionDashedButton.setOnAction(event -> {
-            if (!updatingControls) {
-                controller.toggleConnectionDashed();
+        connectionLineStyleBox.getItems().addAll("实线", "虚线");
+        connectionLineStyleBox.setValue("实线");
+        connectionLineStyleBox.setTooltip(new javafx.scene.control.Tooltip("线条样式"));
+        connectionLineStyleBox.setMinWidth(86);
+        connectionLineStyleBox.setOnAction(event -> {
+            if (!updatingControls && connectionLineStyleBox.getValue() != null) {
+                controller.changeConnectionDashed("虚线".equals(connectionLineStyleBox.getValue()));
             }
         });
-        ToggleGroup connectionShapeGroup = new ToggleGroup();
-        curveConnectionButton.setToggleGroup(connectionShapeGroup);
-        elbowConnectionButton.setToggleGroup(connectionShapeGroup);
-        curveConnectionButton.setTooltip(new javafx.scene.control.Tooltip("曲线连接"));
-        elbowConnectionButton.setTooltip(new javafx.scene.control.Tooltip("折线连接"));
-        curveConnectionButton.setOnAction(event -> {
-            if (!updatingControls) {
-                controller.changeConnectionShape(ConnectionShape.CURVE);
-            }
-        });
-        elbowConnectionButton.setOnAction(event -> {
-            if (!updatingControls) {
-                controller.changeConnectionShape(ConnectionShape.ELBOW);
+        connectionShapeBox.getItems().addAll("曲线", "折线");
+        connectionShapeBox.setValue("曲线");
+        connectionShapeBox.setTooltip(new javafx.scene.control.Tooltip("连接形状"));
+        connectionShapeBox.setMinWidth(86);
+        connectionShapeBox.setOnAction(event -> {
+            if (!updatingControls && connectionShapeBox.getValue() != null) {
+                ConnectionShape shape = "折线".equals(connectionShapeBox.getValue())
+                        ? ConnectionShape.ELBOW : ConnectionShape.CURVE;
+                controller.changeConnectionShape(shape);
             }
         });
 
@@ -236,8 +242,8 @@ public class ToolbarPanel extends VBox {
                 ribbonGroup("画布", canvasPicker,
                         button("背景图", "选择图片作为画布背景", controller::chooseCanvasBackgroundImage),
                         button("清除图", "清除画布背景图片", controller::clearCanvasBackgroundImage)),
-                ribbonGroup("连接线", connectionPicker, connectionWidthBox, connectionDashedButton,
-                        curveConnectionButton, elbowConnectionButton)
+                ribbonGroup("连接线", connectionPicker, connectionWidthBox, connectionLineStyleBox,
+                        connectionShapeBox)
         );
         HBox layoutPage = ribbonPage(
                 ribbonGroup("分布方式", autoLayout, leftLayout, rightLayout)
@@ -285,7 +291,7 @@ public class ToolbarPanel extends VBox {
         ScrollPane toolScroller = new ScrollPane(ribbonPages);
         toolScroller.getStyleClass().add("tool-scroller");
         toolScroller.setFitToHeight(true);
-        toolScroller.setFitToWidth(false);
+        toolScroller.setFitToWidth(true);
         toolScroller.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         toolScroller.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         toolScroller.setPannable(true);
@@ -308,24 +314,6 @@ public class ToolbarPanel extends VBox {
         getChildren().addAll(ribbonHeader, toolScroller);
     }
 
-    public TextField getSearchField() {
-        return searchField;
-    }
-
-    public TextField getReplaceField() {
-        return replaceField;
-    }
-
-    public void focusSearchField() {
-        searchField.requestFocus();
-        searchField.selectAll();
-    }
-
-    public void focusReplaceField() {
-        replaceField.requestFocus();
-        replaceField.selectAll();
-    }
-
     public void updateCanvasColor(Color color) {
         updatingControls = true;
         canvasPicker.setValue(color == null ? Color.WHITE : color);
@@ -340,8 +328,15 @@ public class ToolbarPanel extends VBox {
         updatingControls = false;
     }
 
-    public void updateTextStyle(boolean bold, boolean italic, boolean underline, boolean strikethrough) {
+    public void updateTextStyle(String fontFamily, double fontSize,
+                                boolean bold, boolean italic, boolean underline, boolean strikethrough) {
         updatingControls = true;
+        String normalizedFamily = NodeStyle.normalizeFontFamily(fontFamily);
+        if (!fontBox.getItems().contains(normalizedFamily)) {
+            fontBox.getItems().add(normalizedFamily);
+        }
+        fontBox.setValue(normalizedFamily);
+        fontSizeBox.setValue((int) Math.round(fontSize));
         boldButton.setSelected(bold);
         italicButton.setSelected(italic);
         underlineButton.setSelected(underline);
@@ -353,13 +348,8 @@ public class ToolbarPanel extends VBox {
         updatingControls = true;
         connectionPicker.setValue(color == null ? Color.web("#94A3B8") : color);
         connectionWidthBox.setValue(width);
-        connectionDashedButton.setSelected(dashed);
-        connectionDashedButton.setText(dashed ? "虚线" : "实线");
-        if (shape == ConnectionShape.ELBOW) {
-            elbowConnectionButton.setSelected(true);
-        } else {
-            curveConnectionButton.setSelected(true);
-        }
+        connectionLineStyleBox.setValue(dashed ? "虚线" : "实线");
+        connectionShapeBox.setValue(shape == ConnectionShape.ELBOW ? "折线" : "曲线");
         updatingControls = false;
     }
 
@@ -485,6 +475,9 @@ public class ToolbarPanel extends VBox {
                 icon == TextStyleIcon.BOLD ? FontWeight.BOLD : FontWeight.NORMAL,
                 icon == TextStyleIcon.ITALIC ? FontPosture.ITALIC : FontPosture.REGULAR,
                 17));
+        if (icon == TextStyleIcon.ITALIC) {
+            text.getTransforms().add(new Shear(-0.35, 0));
+        }
         text.setUnderline(icon == TextStyleIcon.UNDERLINE);
         text.setStrikethrough(icon == TextStyleIcon.STRIKETHROUGH);
         text.setMouseTransparent(true);
@@ -546,6 +539,7 @@ public class ToolbarPanel extends VBox {
     private HBox ribbonPage(VBox... groups) {
         HBox page = new HBox(10, groups);
         page.getStyleClass().add("tool-row");
+        page.setAlignment(Pos.CENTER);
         page.setPadding(new Insets(8, 12, 8, 12));
         page.setMinWidth(Region.USE_PREF_SIZE);
         return page;
@@ -554,11 +548,13 @@ public class ToolbarPanel extends VBox {
     private VBox ribbonGroup(String title, Region... controls) {
         HBox row = new HBox(6, controls);
         row.getStyleClass().add("ribbon-group-row");
+        row.setAlignment(Pos.CENTER);
         Label label = new Label(title);
         label.getStyleClass().add("ribbon-group-title");
         label.setMaxWidth(Double.MAX_VALUE);
         VBox group = new VBox(4, row, label);
         group.getStyleClass().add("ribbon-group");
+        group.setAlignment(Pos.CENTER);
         return group;
     }
 
