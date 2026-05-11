@@ -304,7 +304,13 @@
 
 .structure-rail-button {
     -fx-min-width: 30;
-    -fx-padding: 8 4;
+    -fx-pref-width: 30;
+    -fx-max-width: 30;
+    -fx-min-height: 58;
+    -fx-pref-height: 58;
+    -fx-padding: 0;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
     -fx-text-alignment: center;
 }
 

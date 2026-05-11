@@ -57,7 +57,7 @@ public class MainFrame extends BorderPane {
         structureContainer.setPrefWidth(EXPANDED_STRUCTURE_PREF_WIDTH);
         structureContainer.setMaxWidth(Double.MAX_VALUE);
 
-        Button expandButton = new Button("<\n结构");
+        Button expandButton = new Button("<");
         expandButton.getStyleClass().add("structure-rail-button");
         expandButton.setTooltip(new Tooltip("展开结构栏"));
         expandButton.setOnAction(event -> expandStructurePanel());
