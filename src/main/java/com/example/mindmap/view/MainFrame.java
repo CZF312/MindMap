@@ -9,6 +9,7 @@ import javafx.scene.control.Slider;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -111,8 +112,8 @@ public class MainFrame extends BorderPane {
     }
 
     private HBox zoomControls(MindMapController controller) {
-        Button zoomOutButton = statusButton("-", "缩小", controller::zoomOut);
-        Button zoomInButton = statusButton("+", "放大", controller::zoomIn);
+        Button zoomOutButton = zoomStepButton("-", "缩小", -10, controller);
+        Button zoomInButton = zoomStepButton("+", "放大", 10, controller);
         zoomOutButton.getStyleClass().add("status-step-button");
         zoomInButton.getStyleClass().add("status-step-button");
         zoomSlider.getStyleClass().add("zoom-slider");
@@ -130,6 +131,8 @@ public class MainFrame extends BorderPane {
         HBox controls = new HBox(8, zoomOutButton, zoomSliderControl, zoomInButton, resetZoomButton);
         controls.getStyleClass().add("zoom-controls");
         controls.setAlignment(Pos.CENTER_RIGHT);
+        installZoomStepFallback(controls, zoomOutButton, -10, controller);
+        installZoomStepFallback(controls, zoomInButton, 10, controller);
         return controls;
     }
 
@@ -165,18 +168,37 @@ public class MainFrame extends BorderPane {
         return stats;
     }
 
+    private Button zoomStepButton(String text, String tooltip, double delta, MindMapController controller) {
+        Button button = new Button(text);
+        button.getStyleClass().add("status-zoom-button");
+        button.setFocusTraversable(false);
+        button.setPickOnBounds(true);
+        button.setTooltip(new Tooltip(tooltip));
+        button.setOnAction(event -> stepZoom(delta, controller));
+        return button;
+    }
+
+    private void installZoomStepFallback(HBox controls, Button button, double delta, MindMapController controller) {
+        controls.addEventFilter(MouseEvent.MOUSE_PRESSED, event -> {
+            if (event.getButton() == MouseButton.PRIMARY
+                    && button.localToScene(button.getBoundsInLocal()).contains(event.getSceneX(), event.getSceneY())) {
+                stepZoom(delta, controller);
+                event.consume();
+            }
+        });
+    }
+
+    private void stepZoom(double delta, MindMapController controller) {
+        double nextValue = Math.max(zoomSlider.getMin(), Math.min(zoomSlider.getMax(), zoomSlider.getValue() + delta));
+        controller.changeZoom(nextValue / 100.0);
+    }
+
     private Button statusButton(String text, String tooltip, Runnable action) {
         Button button = new Button(text);
         button.getStyleClass().add("status-zoom-button");
         button.setFocusTraversable(false);
         button.setTooltip(new Tooltip(tooltip));
         button.setOnAction(event -> action.run());
-        button.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, event -> {
-            if (event.getButton() == MouseButton.PRIMARY) {
-                action.run();
-                event.consume();
-            }
-        });
         return button;
     }
 

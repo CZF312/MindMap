@@ -38,6 +38,7 @@ public class MindMapFileService {
         map.setName(rootElement.getAttribute("name"));
         map.setLayoutType(parseLayout(rootElement.getAttribute("layout")));
         map.setCanvasColor(NodeStyle.fromHex(rootElement.getAttribute("background"), Color.WHITE));
+        map.setCanvasImageUri(attribute(rootElement, "canvasImage", null));
         map.setConnectionColor(NodeStyle.fromHex(rootElement.getAttribute("connectionColor"), Color.web("#94A3B8")));
         map.setConnectionWidth(parseDouble(rootElement.getAttribute("connectionWidth"), 2.2));
         map.setConnectionDashed(Boolean.parseBoolean(rootElement.getAttribute("connectionDashed")));
@@ -65,6 +66,9 @@ public class MindMapFileService {
         root.setAttribute("name", map.getName());
         root.setAttribute("layout", map.getLayoutType().name());
         root.setAttribute("background", NodeStyle.toHex(map.getCanvasColor()));
+        if (map.getCanvasImageUri() != null) {
+            root.setAttribute("canvasImage", map.getCanvasImageUri());
+        }
         root.setAttribute("connectionColor", NodeStyle.toHex(map.getConnectionColor()));
         root.setAttribute("connectionWidth", String.valueOf(map.getConnectionWidth()));
         root.setAttribute("connectionDashed", String.valueOf(map.isConnectionDashed()));

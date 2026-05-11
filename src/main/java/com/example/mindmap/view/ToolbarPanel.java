@@ -233,7 +233,9 @@ public class ToolbarPanel extends VBox {
                 ribbonGroup("查找", button("⌕ 查找替换", "打开查找替换窗口", controller::showFindReplaceDialog))
         );
         HBox stylePage = ribbonPage(
-                ribbonGroup("画布", canvasPicker),
+                ribbonGroup("画布", canvasPicker,
+                        button("背景图", "选择图片作为画布背景", controller::chooseCanvasBackgroundImage),
+                        button("清除图", "清除画布背景图片", controller::clearCanvasBackgroundImage)),
                 ribbonGroup("连接线", connectionPicker, connectionWidthBox, connectionDashedButton,
                         curveConnectionButton, elbowConnectionButton)
         );

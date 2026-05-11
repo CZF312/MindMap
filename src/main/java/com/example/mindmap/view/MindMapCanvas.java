@@ -199,7 +199,7 @@ public class MindMapCanvas extends ScrollPane {
         contentGroup.getTransforms().setAll(new Scale(map.getZoom(), map.getZoom(), 0, 0));
         contentGroup.setLayoutX(metrics.offsetX() * map.getZoom());
         contentGroup.setLayoutY(metrics.offsetY() * map.getZoom());
-        canvasPane.setStyle("-fx-background-color: " + NodeStyle.toHex(map.getCanvasColor()) + ";");
+        canvasPane.setStyle(canvasBackgroundStyle(map));
         canvasPane.setPrefSize(
                 metrics.width() * map.getZoom(),
                 metrics.height() * map.getZoom()
@@ -217,6 +217,23 @@ public class MindMapCanvas extends ScrollPane {
         lastCanvasHeight = metrics.height();
         lastCanvasOffsetX = metrics.offsetX();
         lastCanvasOffsetY = metrics.offsetY();
+    }
+
+    private String canvasBackgroundStyle(MindMap map) {
+        String color = NodeStyle.toHex(map.getCanvasColor());
+        String imageUri = map.getCanvasImageUri();
+        if (imageUri == null || imageUri.isBlank()) {
+            return "-fx-background-color: " + color + ";";
+        }
+        return "-fx-background-color: " + color + ";"
+                + "-fx-background-image: url(\"" + cssUrl(imageUri) + "\");"
+                + "-fx-background-repeat: no-repeat;"
+                + "-fx-background-position: center center;"
+                + "-fx-background-size: cover;";
+    }
+
+    private String cssUrl(String uri) {
+        return uri.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private void drawConnections() {

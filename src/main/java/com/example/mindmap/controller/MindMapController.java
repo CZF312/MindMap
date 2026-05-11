@@ -424,6 +424,31 @@ public class MindMapController {
                 "已设置画布背景色", false);
     }
 
+    public void chooseCanvasBackgroundImage() {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("选择画布背景图片");
+        chooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("图片文件", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp"),
+                new FileChooser.ExtensionFilter("所有文件", "*.*")
+        );
+        Path path = showOpen(chooser);
+        if (path == null) {
+            return;
+        }
+        String uri = path.toUri().toString();
+        executeAndRefresh(new ChangeStyleCommand(currentMap, () -> currentMap.setCanvasImageUri(uri)),
+                "已设置画布背景图片", false);
+    }
+
+    public void clearCanvasBackgroundImage() {
+        if (currentMap.getCanvasImageUri() == null) {
+            notice("当前没有画布背景图片");
+            return;
+        }
+        executeAndRefresh(new ChangeStyleCommand(currentMap, () -> currentMap.setCanvasImageUri(null)),
+                "已清除画布背景图片", false);
+    }
+
     public void changeConnectionColor(Color color) {
         updateConnectionStyle(style -> style.setColor(color),
                 () -> currentMap.setConnectionColor(color), "已设置连接线颜色");

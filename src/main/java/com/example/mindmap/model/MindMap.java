@@ -17,6 +17,7 @@ public class MindMap {
     private boolean modified;
     private double zoom = 1.0;
     private Color canvasColor = Color.WHITE;
+    private String canvasImageUri;
     private Color connectionColor = Color.web("#94A3B8");
     private double connectionWidth = 2.2;
     private boolean connectionDashed;
@@ -89,6 +90,7 @@ public class MindMap {
         copy.modified = modified;
         copy.zoom = zoom;
         copy.canvasColor = canvasColor;
+        copy.canvasImageUri = canvasImageUri;
         copy.connectionColor = connectionColor;
         copy.connectionWidth = connectionWidth;
         copy.connectionDashed = connectionDashed;
@@ -105,6 +107,7 @@ public class MindMap {
         modified = other.modified;
         zoom = other.zoom;
         canvasColor = other.canvasColor;
+        canvasImageUri = other.canvasImageUri;
         connectionColor = other.connectionColor;
         connectionWidth = other.connectionWidth;
         connectionDashed = other.connectionDashed;
@@ -182,6 +185,14 @@ public class MindMap {
 
     public void setCanvasColor(Color canvasColor) {
         this.canvasColor = canvasColor == null ? Color.WHITE : canvasColor;
+    }
+
+    public String getCanvasImageUri() {
+        return canvasImageUri;
+    }
+
+    public void setCanvasImageUri(String canvasImageUri) {
+        this.canvasImageUri = canvasImageUri == null || canvasImageUri.isBlank() ? null : canvasImageUri;
     }
 
     public Color getConnectionColor() {
