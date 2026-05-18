@@ -50,6 +50,7 @@ public class SearchState {
         if (index < 0) {
             index = delta >= 0 ? 0 : resultIds.size() - 1;
         } else {
+            // floorMod 用于在结果列表首尾之间循环跳转。
             index = Math.floorMod(index + delta, resultIds.size());
         }
         return resultIds.get(index);
@@ -76,6 +77,7 @@ public class SearchState {
         int cursor = 0;
         int matchIndex = normalizedSource.indexOf(normalizedTarget);
         while (matchIndex >= 0) {
+            // 先追加未匹配文本，再追加替换内容，然后继续向后搜索。
             result.append(source, cursor, matchIndex).append(safeReplacement(replacement));
             cursor = matchIndex + target.length();
             matchIndex = normalizedSource.indexOf(normalizedTarget, cursor);

@@ -31,6 +31,7 @@ final class ConnectionRenderer {
     private final Group contentGroup;
     private final MindMapController controller;
     private final Function<MindNode, ContextMenu> contextMenuFactory;
+    private final ContextMenuPresenter contextMenuPresenter;
     private final Map<String, ConnectionView> connectionViews = new HashMap<>();
     private final Set<String> selectedConnectionIds = new HashSet<>();
 
@@ -40,10 +41,12 @@ final class ConnectionRenderer {
     }
 
     ConnectionRenderer(Group contentGroup, MindMapController controller,
-                       Function<MindNode, ContextMenu> contextMenuFactory) {
+                       Function<MindNode, ContextMenu> contextMenuFactory,
+                       ContextMenuPresenter contextMenuPresenter) {
         this.contentGroup = contentGroup;
         this.controller = controller;
         this.contextMenuFactory = contextMenuFactory;
+        this.contextMenuPresenter = contextMenuPresenter;
     }
 
     void setSelectedConnectionIds(Set<String> ids) {
@@ -65,6 +68,7 @@ final class ConnectionRenderer {
                 continue;
             }
             boolean selected = selectedConnectionIds.contains(node.getId());
+            // 每条连接线拆成显示、悬停、选中和命中检测四层。
             Shape hoverGlow = createConnectionShape(node.getConnectionStyle().getShape());
             Shape selectionGlow = createConnectionShape(node.getConnectionStyle().getShape());
             Shape visual = createConnectionShape(node.getConnectionStyle().getShape());
@@ -163,7 +167,7 @@ final class ConnectionRenderer {
         });
         shape.setOnContextMenuRequested(event -> {
             controller.prepareConnectionForContext(child.getId());
-            contextMenuFactory.apply(child).show(shape, event.getScreenX(), event.getScreenY());
+            contextMenuPresenter.show(contextMenuFactory.apply(child), shape, event.getScreenX(), event.getScreenY());
             event.consume();
         });
     }

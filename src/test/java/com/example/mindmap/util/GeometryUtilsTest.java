@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class GeometryUtilsTest {
     @Test
     void geometryChangedDetectsMovementButNotEqualCopies() {
+        // 深拷贝后的导图几何信息相同，移动节点后应被识别为发生变化。
         MindMap before = new MindMap();
         MindMap after = before.deepCopy();
 
@@ -23,6 +24,7 @@ class GeometryUtilsTest {
 
     @Test
     void nodeIntersectionUsesNodeBounds() {
+        // 框选区域与节点矩形相交时命中，否则不命中。
         MindNode node = new MindNode("n", "node");
         node.setX(20);
         node.setY(30);
@@ -35,6 +37,7 @@ class GeometryUtilsTest {
 
     @Test
     void connectionIntersectionSupportsCurveAndElbowShapes() {
+        // 曲线和折线连接线都应支持区域命中检测。
         MindNode parent = new MindNode("p", "parent");
         MindNode child = new MindNode("c", "child");
         parent.setX(0);

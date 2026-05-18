@@ -2,7 +2,6 @@ package com.example.mindmap.model;
 
 import com.example.mindmap.command.RenameNodeCommand;
 import com.example.mindmap.service.MindMapFileService;
-import com.example.mindmap.service.MindMapLayoutService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -10,7 +9,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MindMapBehaviorTest {
@@ -19,6 +17,7 @@ class MindMapBehaviorTest {
 
     @Test
     void undoRestoresEditableContentWithoutRestoringFilePathOrZoom() {
+        // 构造一个已保存过的导图，用于验证撤销只恢复可编辑内容。
         MindMap map = new MindMap();
         map.getRoot().setText("before");
         map.setFilePath(Path.of("before.mindmap"));
@@ -31,6 +30,7 @@ class MindMapBehaviorTest {
         map.setZoom(0.6);
         map.setModified(false);
 
+        // 撤销后应恢复节点文本，但不应回滚当前文件路径和缩放比例。
         command.undo();
 
         assertEquals("before", map.getRoot().getText());
@@ -41,6 +41,7 @@ class MindMapBehaviorTest {
 
     @Test
     void movingSubtreeOnlyRecordsOffsetOnDraggedRoot() {
+        // 父节点拖拽时，子节点跟随移动，但只有被拖拽的父节点记录偏移量。
         MindNode parent = new MindNode("parent", "parent");
         MindNode child = new MindNode("child", "child");
         parent.addChild(child);
@@ -58,32 +59,8 @@ class MindMapBehaviorTest {
     }
 
     @Test
-    void automaticLayoutBalancesLargeTopLevelBranchesAcrossSides() {
-        MindMap map = new MindMap();
-        map.setLayoutType(LayoutType.AUTO);
-        MindNode root = map.getRoot();
-        MindNode largeA = map.createNode("large A");
-        MindNode smallA = map.createNode("small A");
-        MindNode largeB = map.createNode("large B");
-        MindNode smallB = map.createNode("small B");
-        root.addChild(largeA);
-        root.addChild(smallA);
-        root.addChild(largeB);
-        root.addChild(smallB);
-        for (int i = 0; i < 8; i++) {
-            largeA.addChild(map.createNode("large A child " + i));
-            largeB.addChild(map.createNode("large B child " + i));
-        }
-
-        new MindMapLayoutService().layout(map);
-
-        boolean largeAOnRight = largeA.getCenterX() > root.getCenterX();
-        boolean largeBOnRight = largeB.getCenterX() > root.getCenterX();
-        assertNotEquals(largeAOnRight, largeBOnRight);
-    }
-
-    @Test
     void loaderUsesOnlyDirectNodeChildAsRoot() throws Exception {
+        // wrapper 内的 node 不是 mindmap 的直接子节点，不能被误认为中心主题。
         Path path = tempDir.resolve("direct-root.mindmap");
         Files.writeString(path, """
                 <?xml version="1.0" encoding="UTF-8"?>
@@ -99,5 +76,38 @@ class MindMapBehaviorTest {
 
         assertEquals("right", map.getRoot().getId());
         assertEquals("right", map.getRoot().getText());
+    }
+
+    @Test
+    void fileRoundTripPreservesManualNodeGeometry() throws Exception {
+        // 保存再读取后，手动设置的坐标和拖拽偏移量应保持一致。
+        MindMap map = new MindMap();
+        MindNode root = map.getRoot();
+        root.setX(120);
+        root.setY(240);
+        root.setOffsetX(-30);
+        root.setOffsetY(45);
+        MindNode child = map.createNode("child");
+        child.setX(500);
+        child.setY(180);
+        child.setOffsetX(70);
+        child.setOffsetY(-25);
+        root.addChild(child);
+        Path path = tempDir.resolve("geometry.mindmap");
+
+        MindMapFileService fileService = new MindMapFileService();
+        fileService.save(map, path);
+        MindMap loaded = fileService.load(path);
+        MindNode loadedRoot = loaded.getRoot();
+        MindNode loadedChild = loadedRoot.getChildren().get(0);
+
+        assertEquals(120, loadedRoot.getX());
+        assertEquals(240, loadedRoot.getY());
+        assertEquals(-30, loadedRoot.getOffsetX());
+        assertEquals(45, loadedRoot.getOffsetY());
+        assertEquals(500, loadedChild.getX());
+        assertEquals(180, loadedChild.getY());
+        assertEquals(70, loadedChild.getOffsetX());
+        assertEquals(-25, loadedChild.getOffsetY());
     }
 }

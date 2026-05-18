@@ -36,6 +36,7 @@ final class NodeRenderer {
     private final Group contentGroup;
     private final MindMapController controller;
     private final Runnable connectionUpdater;
+    private final ContextMenuPresenter contextMenuPresenter;
     private final Map<String, StackPane> nodeViews = new HashMap<>();
     private MindMap map;
     private double dragLastX;
@@ -46,10 +47,12 @@ final class NodeRenderer {
         TOP_LEFT, TOP, TOP_RIGHT, RIGHT, BOTTOM_RIGHT, BOTTOM, BOTTOM_LEFT, LEFT
     }
 
-    NodeRenderer(Group contentGroup, MindMapController controller, Runnable connectionUpdater) {
+    NodeRenderer(Group contentGroup, MindMapController controller, Runnable connectionUpdater,
+                 ContextMenuPresenter contextMenuPresenter) {
         this.contentGroup = contentGroup;
         this.controller = controller;
         this.connectionUpdater = connectionUpdater;
+        this.contextMenuPresenter = contextMenuPresenter;
     }
 
     void clear() {
@@ -59,6 +62,7 @@ final class NodeRenderer {
     void draw(MindMap map, Set<String> selectedIds, Set<String> searchIds) {
         this.map = map;
         clear();
+        // 只绘制可见节点；被折叠的子节点仍保留在模型中。
         for (MindNode node : map.visibleNodes()) {
             drawNode(node, selectedIds.contains(node.getId()), searchIds.contains(node.getId()));
         }
@@ -150,7 +154,7 @@ final class NodeRenderer {
         box.setOnMouseClicked(event -> {
             if (event.getButton() == MouseButton.SECONDARY) {
                 controller.prepareNodeForDrag(node, false);
-                contextMenu(node).show(box, event.getScreenX(), event.getScreenY());
+                contextMenuPresenter.show(contextMenu(node), box, event.getScreenX(), event.getScreenY());
                 event.consume();
             }
         });

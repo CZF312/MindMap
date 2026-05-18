@@ -46,6 +46,8 @@ import javafx.scene.text.TextAlignment;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
+import java.io.FileNotFoundException;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -134,10 +136,10 @@ public class MindMapController {
             editHistory.clear();
             searchState.setResults(List.of());
             recentFileService.add(path);
-            refreshAll((recent ? "已打开最近文件：" : "打开成功：") + path, true);
+            refreshAll((recent ? "已打开最近文件：" : "打开成功：") + path, false);
         } catch (Exception ex) {
             Dialogs.error(stage, "打开失败", ex.getMessage());
-            refreshAll("打开失败，当前导图未改变", true);
+            refreshAll("打开失败，当前导图未改变", false);
         }
     }
 
@@ -145,7 +147,18 @@ public class MindMapController {
         if (currentMap.getFilePath() == null) {
             return saveMapAs();
         }
-        return saveTo(currentMap.getFilePath());
+        try {
+            return saveTo(currentMap.getFilePath());
+        } catch (Exception ex) {
+            if (shouldOfferSaveAs(ex)
+                    && Dialogs.confirm(stage, "保存失败",
+                    "原文件所在位置不可写或文件已不可用，是否另存为到其他位置？")) {
+                return saveMapAs();
+            }
+            Dialogs.error(stage, "保存失败", ex.getMessage());
+            mainFrame.setStatus("保存失败");
+            return false;
+        }
     }
 
     public boolean saveMapAs() {
@@ -155,20 +168,32 @@ public class MindMapController {
             mainFrame.setStatus("已取消保存");
             return false;
         }
-        return saveTo(ensureExtension(path, ".mindmap"));
-    }
-
-    private boolean saveTo(Path path) {
         try {
-            fileService.save(currentMap, path);
-            recentFileService.add(path);
-            refreshAll("保存成功：" + path, true);
-            return true;
+            return saveTo(ensureExtension(path, ".mindmap"));
         } catch (Exception ex) {
             Dialogs.error(stage, "保存失败", ex.getMessage());
             mainFrame.setStatus("保存失败");
             return false;
         }
+    }
+
+    private boolean saveTo(Path path) throws Exception {
+        fileService.save(currentMap, path);
+        recentFileService.add(path);
+        refreshAll("保存成功：" + path, false);
+        return true;
+    }
+
+    private boolean shouldOfferSaveAs(Exception ex) {
+        Throwable current = ex;
+        while (current != null) {
+            if (current instanceof AccessDeniedException || current instanceof FileNotFoundException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        String message = ex.getMessage();
+        return message != null && (message.contains("拒绝访问") || message.contains("Access is denied"));
     }
 
     public void exportPng() {

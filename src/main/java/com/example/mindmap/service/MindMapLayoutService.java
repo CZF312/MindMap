@@ -25,6 +25,7 @@ public class MindMapLayoutService {
         if (map == null || map.getRoot() == null) {
             return;
         }
+        // 先测量文本尺寸，让布局计算使用节点的实际宽高。
         map.allNodes().forEach(this::measureNode);
         MindNode root = map.getRoot();
         root.setX(ROOT_X - root.getWidth() / 2 + root.getOffsetX());
@@ -39,6 +40,7 @@ public class MindMapLayoutService {
             List<MindNode> right = new ArrayList<>();
             double leftHeight = 0;
             double rightHeight = 0;
+            // AUTO 布局将一级分支分配到当前总高度较短的一侧。
             for (MindNode child : root.getChildren()) {
                 double childHeight = subtreeHeight(child);
                 if (rightHeight <= leftHeight) {
@@ -90,6 +92,7 @@ public class MindMapLayoutService {
             node.setX(x + node.getOffsetX());
             node.setY(y + node.getOffsetY());
             if (!node.isCollapsed()) {
+                // 围绕父节点中心线递归摆放可见子节点。
                 double childAnchor = direction > 0
                         ? node.getX() + node.getWidth() + H_GAP
                         : node.getX() - H_GAP;

@@ -5,6 +5,7 @@ import com.example.mindmap.command.Command;
 import java.util.ArrayDeque;
 
 public class EditHistory {
+    // 使用两个栈分别管理撤销和重做，控制器不需要直接维护历史细节。
     private final ArrayDeque<Command> undoStack = new ArrayDeque<>();
     private final ArrayDeque<Command> redoStack = new ArrayDeque<>();
 
@@ -20,6 +21,7 @@ public class EditHistory {
 
     public void pushExecuted(Command command) {
         undoStack.push(command);
+        // 新编辑会产生新的历史分支，因此需要清空原有重做栈。
         redoStack.clear();
     }
 

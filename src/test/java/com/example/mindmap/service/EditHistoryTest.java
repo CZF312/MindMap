@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class EditHistoryTest {
     @Test
     void executeUndoAndRedoMoveCommandBetweenStacks() {
+        // 使用简单计数命令模拟一次可撤销编辑。
         AtomicInteger value = new AtomicInteger();
         EditHistory history = new EditHistory();
         Command command = new CounterCommand(value);
@@ -35,6 +36,7 @@ class EditHistoryTest {
 
     @Test
     void newExecutedCommandClearsRedoStack() {
+        // 撤销后如果执行新命令，旧的重做路径应被清空。
         AtomicInteger value = new AtomicInteger();
         EditHistory history = new EditHistory();
 

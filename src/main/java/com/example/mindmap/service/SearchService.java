@@ -8,6 +8,7 @@ import java.util.Locale;
 
 public class SearchService {
     public List<MindNode> search(MindMap map, String keyword) {
+        // 先统一关键词大小写，再与每个节点文本进行不区分大小写的比较。
         String normalized = keyword == null ? "" : keyword.trim().toLowerCase(Locale.ROOT);
         if (map == null || normalized.isEmpty()) {
             return List.of();

@@ -17,6 +17,7 @@ import javafx.scene.control.ScrollPane.ScrollBarPolicy;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.image.WritableImage;
 import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
@@ -36,6 +37,7 @@ public class MindMapCanvas extends ScrollPane {
     private final Group contentGroup = new Group();
     private final ConnectionRenderer connectionRenderer;
     private final NodeRenderer nodeRenderer;
+    private ContextMenu activeContextMenu;
     private MindMap map;
     private double lastZoom = 1.0;
     private double lastCanvasWidth;
@@ -48,8 +50,9 @@ public class MindMapCanvas extends ScrollPane {
 
     public MindMapCanvas(MindMapController controller) {
         this.controller = controller;
-        this.connectionRenderer = new ConnectionRenderer(contentGroup, controller, this::connectionContextMenu);
-        this.nodeRenderer = new NodeRenderer(contentGroup, controller, () -> connectionRenderer.updateMovedConnections(map));
+        this.connectionRenderer = new ConnectionRenderer(contentGroup, controller, this::connectionContextMenu, this::showContextMenu);
+        this.nodeRenderer = new NodeRenderer(contentGroup, controller,
+                () -> connectionRenderer.updateMovedConnections(map), this::showContextMenu);
         getStyleClass().add("canvas-scroll");
         canvasHost.getStyleClass().add("canvas-host");
         canvasHost.setAlignment(Pos.CENTER);
@@ -63,6 +66,11 @@ public class MindMapCanvas extends ScrollPane {
         setHbarPolicy(ScrollBarPolicy.ALWAYS);
         setVbarPolicy(ScrollBarPolicy.ALWAYS);
         viewportBoundsProperty().addListener((observable, oldValue, newValue) -> updateCanvasHostSize());
+        addEventFilter(MouseEvent.MOUSE_PRESSED, event -> {
+            if (event.getButton() == MouseButton.PRIMARY) {
+                hideActiveContextMenu();
+            }
+        });
         canvasHost.setOnMouseReleased(event -> {
             if (!event.isControlDown() && event.getButton() == MouseButton.PRIMARY && event.getTarget() == canvasHost) {
                 controller.clearSelection();
@@ -71,7 +79,7 @@ public class MindMapCanvas extends ScrollPane {
         });
         canvasHost.setOnContextMenuRequested(event -> {
             if (event.getTarget() == canvasHost) {
-                canvasContextMenu().show(canvasHost, event.getScreenX(), event.getScreenY());
+                showContextMenu(canvasContextMenu(), canvasHost, event.getScreenX(), event.getScreenY());
                 event.consume();
             }
         });
@@ -118,7 +126,7 @@ public class MindMapCanvas extends ScrollPane {
         });
         canvasPane.setOnContextMenuRequested(event -> {
             if (event.getTarget() == canvasPane) {
-                canvasContextMenu().show(canvasPane, event.getScreenX(), event.getScreenY());
+                showContextMenu(canvasContextMenu(), canvasPane, event.getScreenX(), event.getScreenY());
                 event.consume();
             }
         });
@@ -135,11 +143,32 @@ public class MindMapCanvas extends ScrollPane {
         });
     }
 
+    private void showContextMenu(ContextMenu menu, javafx.scene.Node anchor, double screenX, double screenY) {
+        hideActiveContextMenu();
+        activeContextMenu = menu;
+        menu.setOnHidden(event -> {
+            if (activeContextMenu == menu) {
+                activeContextMenu = null;
+            }
+        });
+        menu.show(anchor, screenX, screenY);
+    }
+
+    private void hideActiveContextMenu() {
+        if (activeContextMenu == null) {
+            return;
+        }
+        ContextMenu menu = activeContextMenu;
+        activeContextMenu = null;
+        menu.hide();
+    }
+
     public void refresh(MindMap map, Set<String> selectedIds, Set<String> selectedConnectionIds, Set<String> searchIds) {
         MindMap previousMap = this.map;
         double oldZoom = lastZoom;
         Point2D oldCenter = previousMap == map ? getViewportLogicalCenter(oldZoom) : null;
         this.map = map;
+        // 根据模型状态重新绘制画布，使选中、搜索命中和缩放状态保持同步。
         contentGroup.getChildren().clear();
         nodeRenderer.clear();
         connectionRenderer.clear();

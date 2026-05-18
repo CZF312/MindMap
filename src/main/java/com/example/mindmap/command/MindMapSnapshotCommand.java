@@ -11,6 +11,7 @@ abstract class MindMapSnapshotCommand implements Command {
     MindMapSnapshotCommand(MindMap target, Runnable change) {
         this.target = target;
         this.change = change;
+        // 执行编辑前先保存快照，撤销时可以完整恢复旧状态。
         this.before = target.deepCopy();
     }
 
@@ -19,6 +20,7 @@ abstract class MindMapSnapshotCommand implements Command {
         if (after == null) {
             change.run();
             target.setModified(true);
+            // 第一次执行后保存新状态，重做时可直接恢复该快照。
             after = target.deepCopy();
         } else {
             target.copyEditableContentFrom(after);

@@ -37,6 +37,7 @@ public class ImageExportService {
     }
 
     public WritableImage createExportSnapshot(MindMapCanvas canvas) {
+        // 按更高倍率截图，保证导出的图片细节足够清晰。
         return canvas.snapshotFull(EXPORT_SCALE);
     }
 
@@ -60,6 +61,7 @@ public class ImageExportService {
         if (path.getParent() != null) {
             Files.createDirectories(path.getParent());
         }
+        // JPG 不支持透明通道，因此需要先转换为不透明背景。
         BufferedImage buffered = toBufferedImage(image, "jpg".equals(format));
         if ("jpg".equals(format)) {
             writeJpg(buffered, path);

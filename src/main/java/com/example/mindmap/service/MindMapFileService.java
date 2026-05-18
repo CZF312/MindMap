@@ -27,6 +27,7 @@ import java.nio.file.Path;
 public class MindMapFileService {
     public MindMap load(Path path) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        // 解析用户选择的导图文件前，先关闭外部 XML 特性，避免读取外部实体。
         factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
         factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
         factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
@@ -42,6 +43,7 @@ public class MindMapFileService {
             throw new IOException("不是有效的 mindmap 文件");
         }
 
+        // 根元素属性描述整个画布，嵌套的 node 元素用于恢复节点树。
         MindMap map = new MindMap();
         map.setName(rootElement.getAttribute("name"));
         map.setLayoutType(parseLayout(rootElement.getAttribute("layout")));
@@ -82,6 +84,7 @@ public class MindMapFileService {
         root.setAttribute("connectionDashed", String.valueOf(map.isConnectionDashed()));
         root.setAttribute("connectionShape", map.getConnectionShape().name());
         document.appendChild(root);
+        // 通过递归追加子 node 元素，把内存中的节点树保存到 XML。
         root.appendChild(writeNode(document, map.getRoot()));
 
         Transformer transformer = TransformerFactory.newInstance().newTransformer();
@@ -118,6 +121,7 @@ public class MindMapFileService {
         element.setAttribute("connectionWidth", String.valueOf(node.getConnectionStyle().getWidth()));
         element.setAttribute("connectionDashed", String.valueOf(node.getConnectionStyle().isDashed()));
         element.setAttribute("connectionShape", node.getConnectionStyle().getShape().name());
+        // 子节点直接嵌套在父节点下，与内存中的树形结构保持一致。
         for (MindNode child : node.getChildren()) {
             element.appendChild(writeNode(document, child));
         }
@@ -134,6 +138,7 @@ public class MindMapFileService {
         node.setOffsetX(parseDouble(element.getAttribute("offsetX"), 0));
         node.setOffsetY(parseDouble(element.getAttribute("offsetY"), 0));
         node.setCollapsed(Boolean.parseBoolean(element.getAttribute("collapsed")));
+        // 样式字段缺失时使用当前默认值，保证旧版本文件仍可打开。
         NodeStyle style = new NodeStyle(
                 NodeStyle.fromHex(element.getAttribute("fill"), Color.WHITE),
                 NodeStyle.fromHex(element.getAttribute("border"), Color.web("#CBD5E1")),
@@ -159,6 +164,7 @@ public class MindMapFileService {
         NodeList children = element.getChildNodes();
         for (int i = 0; i < children.getLength(); i++) {
             if (children.item(i) instanceof Element child && "node".equals(child.getTagName())) {
+                // 递归读取子节点，并通过 MindNode.addChild() 恢复父子关系。
                 node.addChild(readNode(child, defaultConnectionStyle));
             }
         }
