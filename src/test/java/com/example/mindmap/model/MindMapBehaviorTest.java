@@ -59,6 +59,17 @@ class MindMapBehaviorTest {
     }
 
     @Test
+    void fontFamilyUsesRenderableNameWhenDisplayNameIsChosen() {
+        NodeStyle style = new NodeStyle();
+
+        style.setFontFamily("宋体");
+
+        assertEquals("SimSun", style.getFontFamily());
+        assertEquals("SimHei", NodeStyle.normalizeFontFamily("黑体"));
+        assertEquals("KaiTi", NodeStyle.normalizeFontFamily("楷体"));
+    }
+
+    @Test
     void loaderUsesOnlyDirectNodeChildAsRoot() throws Exception {
         // wrapper 内的 node 不是 mindmap 的直接子节点，不能被误认为中心主题。
         Path path = tempDir.resolve("direct-root.mindmap");

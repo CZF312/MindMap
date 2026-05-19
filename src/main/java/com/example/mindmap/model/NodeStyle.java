@@ -74,9 +74,10 @@ public class NodeStyle {
             return "Microsoft YaHei UI";
         }
         return switch (fontFamily.trim()) {
-            case "SimSun" -> "宋体";
-            case "SimHei" -> "黑体";
-            case "KaiTi" -> "楷体";
+            case "宋体", "SimSun" -> "SimSun";
+            case "黑体", "SimHei" -> "SimHei";
+            case "楷体", "KaiTi", "KaiTi_GB2312" -> "KaiTi";
+            case "微软雅黑", "Microsoft YaHei" -> "Microsoft YaHei UI";
             default -> fontFamily.trim();
         };
     }

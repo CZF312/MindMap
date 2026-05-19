@@ -11,6 +11,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.MenuItem;
@@ -32,6 +33,7 @@ import javafx.scene.text.FontPosture;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.scene.transform.Shear;
+import javafx.util.StringConverter;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -69,6 +71,7 @@ public class ToolbarPanel extends VBox {
     private final ToggleButton styleTab = ribbonTab("样式");
     private final ToggleButton layoutTab = ribbonTab("布局");
     private final ToggleButton exportTab = ribbonTab("导出");
+    private static final List<String> FONT_FAMILIES = List.of("Microsoft YaHei UI", "SimSun", "SimHei", "KaiTi", "Arial");
     private boolean updatingControls;
 
     private enum TextAlignIcon {
@@ -149,7 +152,32 @@ public class ToolbarPanel extends VBox {
                 controller.changeConnectionColor(connectionPicker.getValue());
             }
         });
-        fontBox.getItems().addAll("Microsoft YaHei UI", "宋体", "黑体", "楷体", "Arial");
+        fontBox.getItems().addAll(FONT_FAMILIES);
+        fontBox.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(String fontFamily) {
+                return displayFontFamily(fontFamily);
+            }
+
+            @Override
+            public String fromString(String text) {
+                return NodeStyle.normalizeFontFamily(text);
+            }
+        });
+        fontBox.setCellFactory(listView -> new ListCell<>() {
+            @Override
+            protected void updateItem(String fontFamily, boolean empty) {
+                super.updateItem(fontFamily, empty);
+                setText(empty ? null : displayFontFamily(fontFamily));
+            }
+        });
+        fontBox.setButtonCell(new ListCell<>() {
+            @Override
+            protected void updateItem(String fontFamily, boolean empty) {
+                super.updateItem(fontFamily, empty);
+                setText(empty ? null : displayFontFamily(fontFamily));
+            }
+        });
         fontBox.setValue("Microsoft YaHei UI");
         fontBox.setTooltip(new javafx.scene.control.Tooltip("字体"));
         fontBox.setMinWidth(150);
@@ -342,6 +370,16 @@ public class ToolbarPanel extends VBox {
         underlineButton.setSelected(underline);
         strikethroughButton.setSelected(strikethrough);
         updatingControls = false;
+    }
+
+    private String displayFontFamily(String fontFamily) {
+        String normalized = NodeStyle.normalizeFontFamily(fontFamily);
+        return switch (normalized) {
+            case "SimSun" -> "宋体";
+            case "SimHei" -> "黑体";
+            case "KaiTi" -> "楷体";
+            default -> normalized;
+        };
     }
 
     public void updateConnectionStyle(Color color, double width, boolean dashed, ConnectionShape shape) {

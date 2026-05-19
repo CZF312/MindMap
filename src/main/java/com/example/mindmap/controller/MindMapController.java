@@ -401,11 +401,11 @@ public class MindMapController {
     }
 
     public void changeFontFamily(String family) {
-        updateSelectedTextStyle(style -> style.setFontFamily(family), "已设置字体");
+        updateSelectedTextStyle(style -> style.setFontFamily(family), "已设置字体", true);
     }
 
     public void changeFontSize(double size) {
-        updateSelectedTextStyle(style -> style.setFontSize(size), "已设置字号");
+        updateSelectedTextStyle(style -> style.setFontSize(size), "已设置字号", true);
     }
 
     public void toggleBold() {
@@ -546,6 +546,11 @@ public class MindMapController {
     }
 
     private void updateSelectedTextStyle(java.util.function.Consumer<com.example.mindmap.model.NodeStyle> change, String status) {
+        updateSelectedTextStyle(change, status, false);
+    }
+
+    private void updateSelectedTextStyle(java.util.function.Consumer<com.example.mindmap.model.NodeStyle> change,
+                                         String status, boolean relayout) {
         List<String> ids = new ArrayList<>(selectionModel.getSelectedNodeIds());
         if (ids.isEmpty()) {
             notice("请先选择一个或多个节点");
@@ -555,7 +560,7 @@ public class MindMapController {
             for (String id : ids) {
                 find(id).ifPresent(node -> change.accept(node.getStyle()));
             }
-        }), status, false);
+        }), status, relayout);
     }
 
     public void toggleCollapse() {
