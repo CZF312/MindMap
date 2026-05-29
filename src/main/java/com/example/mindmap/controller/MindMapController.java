@@ -666,7 +666,6 @@ public class MindMapController {
 
         Button findPrevious = new Button("上一处(B)");
         Button findNext = new Button("下一处(F)");
-        Button findAll = new Button("查找全部");
         Button replacePrevious = new Button("替换上一处(B)");
         Button replaceCurrent = new Button("替换当前(R)");
         Button replaceNext = new Button("替换下一处(F)");
@@ -685,10 +684,6 @@ public class MindMapController {
         });
         findNext.setOnAction(event -> {
             navigateSearchFromDialog(findField.getText(), 1);
-            refreshMatchLabel.run();
-        });
-        findAll.setOnAction(event -> {
-            search(findField.getText());
             refreshMatchLabel.run();
         });
         replacePrevious.setOnAction(event -> {
@@ -711,7 +706,7 @@ public class MindMapController {
         TabPane tabs = new TabPane();
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         tabs.getTabs().addAll(
-                new Tab("查找(D)", findDialogContent(findField, findMatchLabel, findPrevious, findNext, findAll)),
+                new Tab("查找(D)", findDialogContent(findField, findMatchLabel, findPrevious, findNext)),
                 new Tab("替换(P)", replaceDialogContent(replaceFindField, replaceField, replaceMatchLabel,
                         replacePrevious, replaceCurrent, replaceNext, replaceAll))
         );
@@ -724,12 +719,13 @@ public class MindMapController {
         });
         dialog.getDialogPane().setContent(tabs);
         dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        dialog.setOnHidden(event -> search(""));
         Platform.runLater(findField::requestFocus);
         dialog.show();
     }
 
     private javafx.scene.Node findDialogContent(TextField findField, Label matchLabel, Button findPrevious,
-                                                Button findNext, Button findAll) {
+                                                Button findNext) {
         javafx.scene.layout.GridPane pane = new javafx.scene.layout.GridPane();
         pane.setHgap(12);
         pane.setVgap(14);
@@ -739,7 +735,7 @@ public class MindMapController {
         pane.add(new Label("选项:"), 0, 1);
         pane.add(new Label("向下, 区分全/半角"), 1, 1, 4, 1);
         pane.add(matchLabel, 0, 2, 2, 1);
-        javafx.scene.layout.HBox actions = new javafx.scene.layout.HBox(10, findPrevious, findNext, findAll);
+        javafx.scene.layout.HBox actions = new javafx.scene.layout.HBox(10, findPrevious, findNext);
         actions.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
         pane.add(actions, 2, 2, 3, 1);
         return pane;
