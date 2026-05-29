@@ -26,9 +26,11 @@ import javafx.scene.text.FontPosture;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextAlignment;
+import javafx.scene.text.TextFlow;
 import javafx.scene.transform.Shear;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -59,12 +61,12 @@ final class NodeRenderer {
         nodeViews.clear();
     }
 
-    void draw(MindMap map, Set<String> selectedIds, Set<String> searchIds) {
+    void draw(MindMap map, Set<String> selectedIds, Set<String> searchIds, String searchKeyword) {
         this.map = map;
         clear();
         // 只绘制可见节点；被折叠的子节点仍保留在模型中。
         for (MindNode node : map.visibleNodes()) {
-            drawNode(node, selectedIds.contains(node.getId()), searchIds.contains(node.getId()));
+            drawNode(node, selectedIds.contains(node.getId()), searchIds.contains(node.getId()), searchKeyword);
         }
     }
 
@@ -72,14 +74,11 @@ final class NodeRenderer {
         return nodeViews.get(nodeId);
     }
 
-    private void drawNode(MindNode node, boolean selected, boolean searchHit) {
+    private void drawNode(MindNode node, boolean selected, boolean searchHit, String searchKeyword) {
         StackPane box = new StackPane();
         box.getStyleClass().add(node.isRoot() ? "mind-node-root" : "mind-node");
         if (selected) {
             box.getStyleClass().add("mind-node-selected");
-        }
-        if (searchHit) {
-            box.getStyleClass().add("mind-node-search");
         }
         box.setLayoutX(node.getX());
         box.setLayoutY(node.getY());
@@ -93,22 +92,10 @@ final class NodeRenderer {
                 + "-fx-border-width: " + borderWidth + ";"
                 + "-fx-text-fill: " + NodeStyle.toHex(node.getStyle().getTextColor()) + ";");
 
-        Text text = new Text(node.getText());
-        text.setFill(node.getStyle().getTextColor());
-        text.setWrappingWidth(Math.max(76, node.getWidth() - 28));
-        text.setTextAlignment(node.getStyle().getAlignment());
-        text.setUnderline(node.getStyle().isUnderline());
-        text.setStrikethrough(node.getStyle().isStrikethrough());
-        text.setFont(Font.font(node.getStyle().getFontFamily(),
-                node.getStyle().isBold() ? FontWeight.BOLD : FontWeight.NORMAL,
-                node.getStyle().isItalic() ? FontPosture.ITALIC : FontPosture.REGULAR,
-                node.getStyle().getFontSize()));
-        if (node.getStyle().isItalic()) {
-            text.getTransforms().add(new Shear(-0.22, 0));
-        }
-        box.getChildren().add(text);
-        StackPane.setMargin(text, new Insets(8, 14, 8, 14));
-        StackPane.setAlignment(text, alignment(node.getStyle().getAlignment()));
+        TextFlow textFlow = createTextFlow(node, searchHit, searchKeyword);
+        box.getChildren().add(textFlow);
+        StackPane.setMargin(textFlow, new Insets(8, 14, 8, 14));
+        StackPane.setAlignment(textFlow, alignment(node.getStyle().getAlignment()));
         box.setEffect(new DropShadow(14, Color.rgb(15, 23, 42, 0.08)));
 
         box.setOnMousePressed(event -> {
@@ -179,6 +166,71 @@ final class NodeRenderer {
             return Pos.CENTER_RIGHT;
         }
         return Pos.CENTER;
+    }
+
+    private TextFlow createTextFlow(MindNode node, boolean searchHit, String searchKeyword) {
+        TextFlow flow = new TextFlow();
+        double textWidth = Math.max(76, node.getWidth() - 28);
+        flow.setPrefWidth(textWidth);
+        flow.setMaxWidth(textWidth);
+        flow.setTextAlignment(node.getStyle().getAlignment());
+        String text = node.getText() == null ? "" : node.getText();
+        String keyword = searchKeyword == null ? "" : searchKeyword.trim();
+        if (!searchHit || keyword.isEmpty()) {
+            flow.getChildren().add(normalText(node, text));
+            return flow;
+        }
+        String lowerText = text.toLowerCase(Locale.ROOT);
+        String lowerKeyword = keyword.toLowerCase(Locale.ROOT);
+        int cursor = 0;
+        int match = lowerText.indexOf(lowerKeyword);
+        while (match >= 0) {
+            if (match > cursor) {
+                flow.getChildren().add(normalText(node, text.substring(cursor, match)));
+            }
+            flow.getChildren().add(highlightText(node, text.substring(match, match + keyword.length())));
+            cursor = match + keyword.length();
+            match = lowerText.indexOf(lowerKeyword, cursor);
+        }
+        if (cursor < text.length()) {
+            flow.getChildren().add(normalText(node, text.substring(cursor)));
+        }
+        return flow;
+    }
+
+    private Text normalText(MindNode node, String value) {
+        Text text = new Text(value);
+        applyTextStyle(node, text);
+        return text;
+    }
+
+    private Label highlightText(MindNode node, String value) {
+        Label label = new Label(value);
+        label.getStyleClass().add("mind-node-search-text");
+        label.setTextFill(node.getStyle().getTextColor());
+        label.setFont(textFont(node));
+        label.setUnderline(node.getStyle().isUnderline());
+        if (node.getStyle().isItalic()) {
+            label.getTransforms().add(new Shear(-0.22, 0));
+        }
+        return label;
+    }
+
+    private void applyTextStyle(MindNode node, Text text) {
+        text.setFill(node.getStyle().getTextColor());
+        text.setUnderline(node.getStyle().isUnderline());
+        text.setStrikethrough(node.getStyle().isStrikethrough());
+        text.setFont(textFont(node));
+        if (node.getStyle().isItalic()) {
+            text.getTransforms().add(new Shear(-0.22, 0));
+        }
+    }
+
+    private Font textFont(MindNode node) {
+        return Font.font(node.getStyle().getFontFamily(),
+                node.getStyle().isBold() ? FontWeight.BOLD : FontWeight.NORMAL,
+                node.getStyle().isItalic() ? FontPosture.ITALIC : FontPosture.REGULAR,
+                node.getStyle().getFontSize());
     }
 
     private void startInlineEdit(MindNode node, StackPane box) {

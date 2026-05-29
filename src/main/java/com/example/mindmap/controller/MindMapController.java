@@ -33,6 +33,8 @@ import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
+import javafx.scene.control.Tab;
+import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputControl;
 import javafx.scene.image.WritableImage;
@@ -630,7 +632,7 @@ public class MindMapController {
     }
 
     public void search(String keyword) {
-        searchState.setResults(searchService.search(currentMap, keyword).stream().map(MindNode::getId).toList());
+        searchState.setResults(searchService.search(currentMap, keyword).stream().map(MindNode::getId).toList(), keyword);
         refreshAll(searchState.isEmpty()
                 ? (keyword == null || keyword.isBlank() ? "已清空搜索" : "未找到匹配节点")
                 : "搜索到 " + searchState.size() + " 个匹配节点", false);
@@ -647,34 +649,121 @@ public class MindMapController {
     public void showFindReplaceDialog() {
         Dialog<Void> dialog = new Dialog<>();
         dialog.initOwner(stage);
-        dialog.setTitle("查找替换");
+        dialog.setTitle("查找和替换");
         TextField findField = new TextField();
+        findField.textProperty().addListener((obs, oldValue, newValue) -> search(newValue));
         findField.setPromptText("查找内容");
+        TextField replaceFindField = new TextField();
+        replaceFindField.setPromptText("查找内容");
+        replaceFindField.textProperty().addListener((obs, oldValue, newValue) -> search(newValue));
         TextField replaceField = new TextField();
         replaceField.setPromptText("替换为");
-        Button findNext = new Button("查找下一个");
-        Button replace = new Button("替换");
-        Button replaceAll = new Button("全部替换");
-        javafx.scene.layout.GridPane pane = new javafx.scene.layout.GridPane();
-        pane.setHgap(8);
-        pane.setVgap(10);
-        pane.add(new javafx.scene.control.Label("查找："), 0, 0);
-        pane.add(findField, 1, 0, 3, 1);
-        pane.add(new javafx.scene.control.Label("替换："), 0, 1);
-        pane.add(replaceField, 1, 1, 3, 1);
-        pane.add(findNext, 1, 2);
-        pane.add(replace, 2, 2);
-        pane.add(replaceAll, 3, 2);
-        dialog.getDialogPane().setContent(pane);
-        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
-        findNext.setOnAction(event -> {
-            search(findField.getText());
-            nextSearchResult();
+        Label findMatchLabel = new Label("找到 0 个匹配项");
+        Label replaceMatchLabel = new Label("找到 0 个匹配项");
+        findField.setPrefWidth(320);
+        replaceFindField.setPrefWidth(320);
+        replaceField.setPrefWidth(320);
+
+        Button findPrevious = new Button("上一处(B)");
+        Button findNext = new Button("下一处(F)");
+        Button findAll = new Button("查找全部");
+        Button replacePrevious = new Button("替换上一处(B)");
+        Button replaceCurrent = new Button("替换当前(R)");
+        Button replaceNext = new Button("替换下一处(F)");
+        Button replaceAll = new Button("全部替换(A)");
+
+        Runnable refreshMatchLabel = () -> {
+            String text = "找到 " + searchState.size() + " 个匹配项";
+            findMatchLabel.setText(text);
+            replaceMatchLabel.setText(text);
+        };
+        findField.textProperty().addListener((obs, oldValue, newValue) -> refreshMatchLabel.run());
+        replaceFindField.textProperty().addListener((obs, oldValue, newValue) -> refreshMatchLabel.run());
+        findPrevious.setOnAction(event -> {
+            navigateSearchFromDialog(findField.getText(), -1);
+            refreshMatchLabel.run();
         });
-        replace.setOnAction(event -> replaceCurrentSearchResult(findField.getText(), replaceField.getText()));
-        replaceAll.setOnAction(event -> replaceAllSearchResults(findField.getText(), replaceField.getText()));
+        findNext.setOnAction(event -> {
+            navigateSearchFromDialog(findField.getText(), 1);
+            refreshMatchLabel.run();
+        });
+        findAll.setOnAction(event -> {
+            search(findField.getText());
+            refreshMatchLabel.run();
+        });
+        replacePrevious.setOnAction(event -> {
+            replaceNavigatedSearchResult(replaceFindField.getText(), replaceField.getText(), -1);
+            refreshMatchLabel.run();
+        });
+        replaceCurrent.setOnAction(event -> {
+            replaceCurrentSearchResult(replaceFindField.getText(), replaceField.getText());
+            refreshMatchLabel.run();
+        });
+        replaceNext.setOnAction(event -> {
+            replaceNavigatedSearchResult(replaceFindField.getText(), replaceField.getText(), 1);
+            refreshMatchLabel.run();
+        });
+        replaceAll.setOnAction(event -> {
+            replaceAllSearchResults(replaceFindField.getText(), replaceField.getText());
+            refreshMatchLabel.run();
+        });
+
+        TabPane tabs = new TabPane();
+        tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        tabs.getTabs().addAll(
+                new Tab("查找(D)", findDialogContent(findField, findMatchLabel, findPrevious, findNext, findAll)),
+                new Tab("替换(P)", replaceDialogContent(replaceFindField, replaceField, replaceMatchLabel,
+                        replacePrevious, replaceCurrent, replaceNext, replaceAll))
+        );
+        tabs.getSelectionModel().selectedIndexProperty().addListener((obs, oldValue, newValue) -> {
+            if (newValue.intValue() == 0) {
+                findField.setText(replaceFindField.getText());
+            } else {
+                replaceFindField.setText(findField.getText());
+            }
+        });
+        dialog.getDialogPane().setContent(tabs);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
         Platform.runLater(findField::requestFocus);
         dialog.show();
+    }
+
+    private javafx.scene.Node findDialogContent(TextField findField, Label matchLabel, Button findPrevious,
+                                                Button findNext, Button findAll) {
+        javafx.scene.layout.GridPane pane = new javafx.scene.layout.GridPane();
+        pane.setHgap(12);
+        pane.setVgap(14);
+        pane.setPadding(new Insets(14));
+        pane.add(new Label("查找内容(N)"), 0, 0);
+        pane.add(findField, 1, 0, 4, 1);
+        pane.add(new Label("选项:"), 0, 1);
+        pane.add(new Label("向下, 区分全/半角"), 1, 1, 4, 1);
+        pane.add(matchLabel, 0, 2, 2, 1);
+        javafx.scene.layout.HBox actions = new javafx.scene.layout.HBox(10, findPrevious, findNext, findAll);
+        actions.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+        pane.add(actions, 2, 2, 3, 1);
+        return pane;
+    }
+
+    private javafx.scene.Node replaceDialogContent(TextField findField, TextField replaceField, Label matchLabel,
+                                                   Button replacePrevious, Button replaceCurrent,
+                                                   Button replaceNext, Button replaceAll) {
+        javafx.scene.layout.GridPane pane = new javafx.scene.layout.GridPane();
+        pane.setHgap(12);
+        pane.setVgap(14);
+        pane.setPadding(new Insets(14));
+        pane.add(new Label("查找内容(N)"), 0, 0);
+        pane.add(findField, 1, 0, 4, 1);
+        pane.add(new Label("替换为(I)"), 0, 1);
+        pane.add(replaceField, 1, 1, 4, 1);
+        pane.add(new Label("选项:"), 0, 2);
+        pane.add(new Label("向下, 区分全/半角"), 1, 2, 4, 1);
+        pane.add(matchLabel, 0, 3, 2, 1);
+        javafx.scene.layout.HBox actions = new javafx.scene.layout.HBox(10,
+                replacePrevious, replaceCurrent, replaceNext, replaceAll);
+        actions.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+        pane.add(actions, 1, 3, 4, 1);
+        return pane;
     }
 
     public void replaceCurrentSearchResult(String keyword, String replacement) {
@@ -683,7 +772,7 @@ public class MindMapController {
             notice("请输入查找内容");
             return;
         }
-        if (searchState.isEmpty()) {
+        if (searchState.isEmpty() || !searchState.matchesKeyword(target)) {
             search(target);
         }
         if (searchState.isEmpty()) {
@@ -716,6 +805,14 @@ public class MindMapController {
         search(target);
     }
 
+    public void replaceNavigatedSearchResult(String keyword, String replacement, int delta) {
+        if (!ensureSearchReady(keyword)) {
+            return;
+        }
+        navigateSearch(delta);
+        replaceCurrentSearchResult(keyword, replacement);
+    }
+
     private void navigateSearch(int delta) {
         if (searchState.isEmpty()) {
             notice("没有搜索结果");
@@ -726,6 +823,28 @@ public class MindMapController {
         selectionModel.setPrimaryNodeId(id);
         refreshAll("定位到搜索结果 " + (searchState.currentIndex() + 1) + "/" + searchState.size(), true);
         Platform.runLater(() -> mainFrame.getCanvas().scrollToNode(id));
+    }
+
+    private void navigateSearchFromDialog(String keyword, int delta) {
+        if (ensureSearchReady(keyword)) {
+            navigateSearch(delta);
+        }
+    }
+
+    private boolean ensureSearchReady(String keyword) {
+        String target = keyword == null ? "" : keyword;
+        if (target.isBlank()) {
+            notice("请输入查找内容");
+            return false;
+        }
+        if (searchState.isEmpty() || !searchState.matchesKeyword(target)) {
+            search(target);
+        }
+        if (searchState.isEmpty()) {
+            notice("没有搜索结果");
+            return false;
+        }
+        return true;
     }
 
     public void zoomIn() {
@@ -940,7 +1059,7 @@ public class MindMapController {
             selectionModel.selectOnly(currentMap.getRoot());
         }
         mainFrame.getCanvas().refresh(currentMap, selectionModel.getSelectedNodeIds(),
-                selectionModel.getSelectedConnectionIds(), searchIds);
+                selectionModel.getSelectedConnectionIds(), searchIds, searchState.keyword());
         mainFrame.getTreePanel().refresh(currentMap, selectionModel.getPrimaryNodeId());
         mainFrame.getToolbarPanel().updateState(primaryNode() != null,
                 primaryNode() != null && !primaryNode().isRoot(),

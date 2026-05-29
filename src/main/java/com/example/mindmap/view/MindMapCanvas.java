@@ -163,7 +163,8 @@ public class MindMapCanvas extends ScrollPane {
         menu.hide();
     }
 
-    public void refresh(MindMap map, Set<String> selectedIds, Set<String> selectedConnectionIds, Set<String> searchIds) {
+    public void refresh(MindMap map, Set<String> selectedIds, Set<String> selectedConnectionIds,
+                        Set<String> searchIds, String searchKeyword) {
         MindMap previousMap = this.map;
         double oldZoom = lastZoom;
         Point2D oldCenter = previousMap == map ? getViewportLogicalCenter(oldZoom) : null;
@@ -194,7 +195,7 @@ public class MindMapCanvas extends ScrollPane {
         updateCanvasHostSize();
         connectionRenderer.setSelectedConnectionIds(selectedConnectionIds);
         connectionRenderer.draw(map);
-        nodeRenderer.draw(map, selectedIds, searchIds);
+        nodeRenderer.draw(map, selectedIds, searchIds, searchKeyword);
         if (viewportAnchorChanged) {
             Platform.runLater(() -> centerViewportOn(oldCenter));
         }

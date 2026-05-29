@@ -317,8 +317,10 @@
     -fx-border-width: 3;
 }
 
-.mind-node-search {
-    -fx-effect: dropshadow(gaussian, rgba(245, 158, 11, 0.48), 18, 0.35, 0, 0);
+.mind-node-search-text {
+    -fx-background-color: #fde68a;
+    -fx-background-radius: 3;
+    -fx-padding: 0 2 0 2;
 }
 
 .collapse-handle {

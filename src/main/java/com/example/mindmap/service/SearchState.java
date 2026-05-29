@@ -8,13 +8,19 @@ import java.util.Locale;
 public class SearchState {
     private final List<String> resultIds = new ArrayList<>();
     private int index = -1;
+    private String keyword = "";
 
     public void setResults(Collection<String> ids) {
+        setResults(ids, "");
+    }
+
+    public void setResults(Collection<String> ids, String keyword) {
         resultIds.clear();
         if (ids != null) {
             resultIds.addAll(ids);
         }
         index = -1;
+        this.keyword = keyword == null ? "" : keyword;
     }
 
     public boolean isEmpty() {
@@ -27,6 +33,14 @@ public class SearchState {
 
     public int currentIndex() {
         return index;
+    }
+
+    public String keyword() {
+        return keyword;
+    }
+
+    public boolean matchesKeyword(String value) {
+        return normalized(keyword).equals(normalized(value));
     }
 
     public List<String> ids() {
@@ -87,5 +101,9 @@ public class SearchState {
 
     private static String safeReplacement(String replacement) {
         return replacement == null ? "" : replacement;
+    }
+
+    private static String normalized(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 }
